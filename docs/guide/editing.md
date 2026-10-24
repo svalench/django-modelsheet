@@ -8,7 +8,8 @@ Double-click a cell or use the formula bar. Edits remain in a local buffer until
 
 | Action | Shortcut |
 | --- | --- |
-| Navigate | Arrows, Tab, Enter |
+| Navigate | Arrows, Tab |
+| Edit the selected cell | Enter or double-click |
 | Extend selection | Shift + navigation |
 | Save | Ctrl/Cmd+S |
 | Undo / redo | Ctrl/Cmd+Z / Ctrl/Cmd+Y |

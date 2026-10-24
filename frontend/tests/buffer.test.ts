@@ -7,6 +7,30 @@ const rows = [
   {pk:'2',version:'v2',values:{name:'Two',price:'20',stock:2}},
 ];
 function buffer() { return new EditBuffer(rows,['name','price','stock'],new Set(['price','stock']),'2026-10-24'); }
+it('does not dirty unchanged numeric, boolean or null values returned by input editors', () => {
+  const edits = new EditBuffer([{pk:'1',version:'v',values:{stock:25,zero:0,active:false,date:null}}],
+    ['stock','zero','active','date'],new Set(['stock','zero','active','date']),'2026-10-24');
+  edits.apply([{pk:'1',field:'stock',value:'25'},{pk:'1',field:'zero',value:'0'},
+    {pk:'1',field:'active',value:'false'},{pk:'1',field:'date',value:''}]);
+  expect(edits.dirty).toBe(false); expect(edits.payload()).toEqual([]);
+});
+it('does not create an undo step or clear redo for a no-op editor blur', () => {
+  const edits=buffer(); edits.apply([{pk:'1',field:'price',value:'11'}]);
+  edits.undo(); edits.apply([{pk:'2',field:'stock',value:'2'}]); edits.redo();
+  expect(edits.raw('1','price')).toBe('11');
+  expect(edits.payload()).toEqual([{pk:'1',version:'v1',values:{price:'11'}}]);
+  edits.apply([{pk:'1',field:'stock',value:'4'}]);
+  edits.apply([{pk:'1',field:'stock',value:'1'}]);
+  expect(edits.changes['1']).not.toHaveProperty('stock');
+});
+it('preserves meaningful string identifiers, cleared numbers and formula assignments', () => {
+  const edits=new EditBuffer([{pk:'1',version:'v',values:{code:'025',stock:25,note:''}}],
+    ['code','stock','note'],new Set(['code','stock','note']),'2026-10-24');
+  edits.apply([{pk:'1',field:'code',value:'25'},{pk:'1',field:'stock',value:''},{pk:'1',field:'note',value:null}]);
+  expect(edits.changes['1']).toEqual({code:'25',stock:'',note:null});
+  edits.apply([{pk:'1',field:'stock',value:'=25'}]);
+  expect(edits.changes['1'].stock).toBe('=25');
+});
 it('undoes and redoes an entire paste while skipping readonly cells', () => {
   const edits = buffer();
   expect(edits.apply([{pk:'1',field:'name',value:'Changed'}, {pk:'1',field:'price',value:'12'}, {pk:'2',field:'price',value:'13'}])).toBe(1);

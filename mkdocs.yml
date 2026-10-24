@@ -4,6 +4,8 @@ site_url: https://svalench.github.io/django-modelsheet/
 repo_url: https://github.com/svalench/django-modelsheet
 repo_name: svalench/django-modelsheet
 edit_uri: edit/main/docs/
+hooks:
+- scripts/docs_assets.py
 copyright: MIT · django-modelsheet
 theme:
   name: material

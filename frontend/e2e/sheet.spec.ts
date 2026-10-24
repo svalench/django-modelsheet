@@ -118,9 +118,31 @@ test('keyboard moves the formula address and Shift extends a range', async ({pag
   await page.keyboard.press('Tab');
   await expect(page.locator('.ms-address')).toHaveText('C2');
   await page.keyboard.press('Enter');
+  await expect(page.locator('.tabulator-cell.tabulator-editing input')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('ArrowDown');
   await expect(page.locator('.ms-address')).toHaveText('C3');
   await page.keyboard.press('Shift+ArrowDown');
   await expect(page.locator('.ms-selection')).toContainText('2');
+});
+
+test('opening and leaving a numeric editor keeps the buffer clean and editor inside the cell', async ({page}) => {
+  const stock=page.locator('.tabulator-row').nth(3).locator('[tabulator-field=stock]');
+  const original=await stock.textContent();
+  await stock.dblclick();
+  const input=stock.locator('input');
+  await expect(input).toHaveValue(original!);
+  const cellBox=await stock.boundingBox(), inputBox=await input.boundingBox();
+  expect(inputBox!.x).toBeGreaterThanOrEqual(cellBox!.x);
+  expect(inputBox!.y).toBeGreaterThanOrEqual(cellBox!.y);
+  expect(inputBox!.x+inputBox!.width).toBeLessThanOrEqual(cellBox!.x+cellBox!.width+1);
+  expect(inputBox!.y+inputBox!.height).toBeLessThanOrEqual(cellBox!.y+cellBox!.height+1);
+  await page.getByLabel('Formula',{exact:true}).click();
+  await expect(stock).not.toHaveClass(/ms-dirty/);
+  await expect(page.getByRole('button',{name:'Save',exact:true})).toBeDisabled();
+  await stock.click(); await page.keyboard.press('ArrowDown');
+  const next=page.locator('.tabulator-row').nth(4).locator('[tabulator-field=stock]');
+  await expect(page.getByLabel('Formula',{exact:true})).toHaveValue((await next.textContent())!);
 });
 
 test('sorting dialog applies server ordering', async ({page}) => {

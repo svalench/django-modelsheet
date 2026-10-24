@@ -8,7 +8,8 @@
 
 | 操作 | 快捷键 |
 | --- | --- |
-| 导航 | 方向键、Tab、Enter |
+| 导航 | 方向键、Tab |
+| 编辑所选单元格 | Enter 或双击 |
 | 扩展选区 | Shift + 导航键 |
 | 保存 | Ctrl/Cmd+S |
 | 撤销 / 重做 | Ctrl/Cmd+Z / Ctrl/Cmd+Y |

@@ -24,7 +24,14 @@ export class EditBuffer {
       const row = this.rows.find(row => row.pk === edit.pk);
       if (!row || !this.editable.has(edit.field)) { skipped++; continue; }
       next[edit.pk] ??= {};
-      if (edit.value === row.values[edit.field]) delete next[edit.pk][edit.field];
+      const original = row.values[edit.field];
+      // Input editors return strings even when JSON supplied a number/bool/null.
+      // Recognize only their unchanged editor representation, without coercing
+      // text identifiers, empty numeric input or formulas into equality.
+      const unchanged = edit.value === original
+        || ((typeof original === 'number' || typeof original === 'boolean') && edit.value === String(original))
+        || (original === null && edit.value === '');
+      if (unchanged) delete next[edit.pk][edit.field];
       else next[edit.pk][edit.field] = edit.value;
       if (!Object.keys(next[edit.pk]).length) delete next[edit.pk];
     }

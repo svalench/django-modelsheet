@@ -1,6 +1,8 @@
 import {TabulatorFull as Tabulator} from 'tabulator-tables';
 import 'tabulator-tables/dist/css/tabulator.min.css';
 import './style.css';
+import './grid-editors.css';
+import {watchActiveCell} from './grid-selection';
 import {EditBuffer, encodeTSV, parseTSV, Row} from './buffer';
 import {columnName, evaluate, FormulaError, parse, translateFormula} from './formula';
 import {translator} from './i18n';
@@ -40,7 +42,7 @@ async function start() {
   const meta = new Map(fields.map(field => [field.name, field]));
   const editable = new Set(fields.filter(field => field.editable).map(field => field.name));
   let buffer = new EditBuffer([], [], editable, ''), snapshot = '', loadedState: State;
-  let table: any, active: any, anchor: any, busy = false, count: number | null = null, hasNext = false;
+  let table: any, active: any, busy = false, count: number | null = null, hasNext = false;
   let savingKey: string | null = null, savingBody = '';
   let renderVersion=0;
   let copied: {text: string; row: number; col: number; snapshot: string} | null = null;
@@ -179,7 +181,7 @@ async function start() {
         rowHeader:{field:'_rownum', formatter:'rownum', width:55, frozen:true, headerSort:false, hozAlign:'center'},
         clipboard:false,
       } as any);
-      table.on('cellClick', (_event: any, cell: any) => { active = cell; anchor = cell; updateFormulaBar(); });
+      watchActiveCell(table, cell => { active = cell; updateFormulaBar(); });
       table.on('cellEditing', (cell: any) => { cell.setValue(buffer.raw(cell.getRow().getData().__modelsheet_pk, cell.getField()), false); });
       table.on('cellEdited', (cell: any) => { active = cell; edit(cell.getRow().getData().__modelsheet_pk, cell.getField(), cell.getValue()); });
       table.on('rangeChanged', () => { const cells = selected(); selectionInfo.textContent = `${new Set(cells.map(c => c.getRow().getData().__modelsheet_pk)).size} ${t('Selected rows on this page')}`; });
@@ -212,8 +214,9 @@ async function start() {
   function updateFormulaBar() {
     if (!active) return;
     const pk = active.getRow().getData().__modelsheet_pk, name = active.getField();
-    address.textContent = `${columnName(state.columns!.indexOf(name))}${buffer.rows.findIndex(row => row.pk === pk) + 1}`;
-    formulaInput.value = String(buffer.raw(pk, name) ?? ''); formulaInput.disabled = !editable.has(name);
+    const virtual = computed.find(field => field.name === name);
+    address.textContent = virtual ? `ƒx · ${virtual.label}` : `${columnName(state.columns!.indexOf(name))}${buffer.rows.findIndex(row => row.pk === pk) + 1}`;
+    formulaInput.value = virtual?.formula ?? String(buffer.raw(pk, name) ?? ''); formulaInput.disabled = !editable.has(name);
   }
   function edit(pk: string, field: string, value: any) {
     buffer.apply([{pk, field, value}]); errors.delete(`${pk}:${field}`); conflicts.delete(`${pk}:${field}`); savedCells.delete(`${pk}:${field}`); savingKey = null; render();
@@ -259,32 +262,6 @@ async function start() {
     }
     const skipped = buffer.apply(edits); render(); if (skipped) status.textContent = `${t('Readonly cells skipped')}: ${skipped}`;
   }
-  grid.addEventListener('keydown', event => {
-    if ((event.target as HTMLElement).matches('input, textarea, select') || !active || busy) return;
-    const row = buffer.rows.findIndex(item => item.pk === active.getRow().getData().__modelsheet_pk), col = state.columns!.indexOf(active.getField());
-    if (col < 0) return;
-    const moves: Record<string,[number,number]> = {ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1],Enter:[event.shiftKey ? -1 : 1,0],Tab:[0,event.shiftKey ? -1 : 1]};
-    if (event.key in moves && !event.ctrlKey && !event.metaKey && !event.altKey) {
-      event.preventDefault(); event.stopImmediatePropagation();
-      const [dr,dc] = moves[event.key];
-      let nextRow = row+dr, nextCol = col+dc;
-      if (event.key === 'Tab') {
-        if (nextCol >= state.columns!.length) { nextRow++; nextCol=0; }
-        if (nextCol < 0) { nextRow--; nextCol=state.columns!.length-1; }
-      }
-      nextRow = Math.max(0,Math.min(buffer.rows.length-1,nextRow)); nextCol=Math.max(0,Math.min(state.columns!.length-1,nextCol));
-      const cell = table.getRow(buffer.rows[nextRow].pk).getCell(state.columns![nextCol]);
-      const extend = event.shiftKey && event.key.startsWith('Arrow');
-      if (!extend) anchor=cell;
-      const range = table.getRanges()[0];
-      if (range) range.setBounds(extend ? anchor ?? active : cell,cell);
-      else table.addRange(extend ? anchor ?? active : cell,cell);
-      active=cell; updateFormulaBar();
-      void cell.getRow().scrollTo('nearest',false).then(() => {
-        cell.getElement().tabIndex=0; cell.getElement().focus({preventScroll:true});
-      }).catch(showError);
-    }
-  },true);
   root.addEventListener('keydown', event => {
     const target = event.target as HTMLElement;
     if (target.matches('input, textarea, select') || target.closest('dialog')) return;

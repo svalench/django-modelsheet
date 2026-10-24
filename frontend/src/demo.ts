@@ -1,6 +1,8 @@
 import {TabulatorFull as Tabulator} from 'tabulator-tables';
 import 'tabulator-tables/dist/css/tabulator.min.css';
 import './demo.css';
+import './grid-editors.css';
+import {watchActiveCell} from './grid-selection';
 import {DemoSession, DemoValidationError, demoColumns} from './demo-session';
 import {encodeTSV, parseTSV} from './buffer';
 import {columnName, FormulaError, translateFormula} from './formula';
@@ -195,7 +197,10 @@ async function start(root: HTMLElement) {
       },
     })),
   } as any);
-  table.on('cellClick', (_event: unknown, cell: any) => { active={pk:cell.getRow().getIndex(),field:cell.getField()}; updateBar(); });
+  watchActiveCell(table, cell => {
+    if (!demoColumns.includes(cell.getField())) return;
+    active={pk:cell.getRow().getIndex(),field:cell.getField()}; updateBar();
+  });
   table.on('cellEditing', (cell: any) => { cell.setValue(session.buffer.raw(cell.getRow().getIndex(),cell.getField()), false); });
   table.on('cellEdited', (cell: any) => {
     active={pk:cell.getRow().getIndex(),field:cell.getField()};
@@ -234,5 +239,6 @@ async function start(root: HTMLElement) {
     });
   });
   await new Promise<void>(resolve => table.on('tableBuilt',resolve));
+  active = {pk:'1',field:'price'};
   render(); selectActive();
 }
