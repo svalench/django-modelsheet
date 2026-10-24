@@ -76,6 +76,7 @@ async function start(root: HTMLElement) {
   const toolbar = el('div', '', 'demo-toolbar'); root.append(toolbar);
   let active = {pk:'1', field:'price'};
   let table: any;
+  let rendering = false;
   const errors = new Map<string, string>();
   const act = (fn: () => void) => { try { fn(); } catch (error) { report(error); } };
   const button = (label: string, fn: () => void, parent: HTMLElement, css = '') => {
@@ -125,19 +126,27 @@ async function start(root: HTMLElement) {
     status.classList.add('demo-error-text');
     if (error instanceof DemoValidationError) {
       errors.set(`${error.pk}:${error.field}`, message(error));
-      table.getRow(error.pk).reformat();
+      refreshCells();
     }
   }
   function updateBar() {
     address.textContent = `${columnName(demoColumns.indexOf(active.field))}${active.pk}`;
     formula.value = String(session.buffer.raw(active.pk, active.field) ?? '');
   }
-  function render(text?: string) {
-    errors.clear();
-    for (const row of session.buffer.rows) {
-      table.getRow(row.pk).update({...row.values, ...session.buffer.changes[row.pk]});
-      table.getRow(row.pk).reformat();
+  function refreshCells() {
+    rendering = true;
+    try {
+      // reformat() destroys/recreates Tabulator cells. Keep component identities
+      // intact, including the library's last-edited cell used by Tab/arrow keys.
+      for (const row of session.buffer.rows) for (const field of demoColumns) {
+        table.getRow(row.pk).getCell(field).setValue(session.buffer.raw(row.pk,field), false);
+      }
+    } finally {
+      rendering = false;
     }
+  }
+  function render(text?: string) {
+    errors.clear(); refreshCells();
     let problem = false;
     for (const row of session.buffer.rows) for (const field of demoColumns) {
       try { session.value(row.pk, field); } catch { problem = true; }
@@ -203,6 +212,7 @@ async function start(root: HTMLElement) {
   });
   table.on('cellEditing', (cell: any) => { cell.setValue(session.buffer.raw(cell.getRow().getIndex(),cell.getField()), false); });
   table.on('cellEdited', (cell: any) => {
+    if (rendering) return;
     active={pk:cell.getRow().getIndex(),field:cell.getField()};
     act(() => { session.buffer.apply([{...active,value:cell.getValue()}]); render(); });
   });

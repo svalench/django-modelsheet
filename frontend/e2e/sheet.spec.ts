@@ -132,7 +132,11 @@ test('opening and leaving a numeric editor keeps the buffer clean and editor ins
   await stock.dblclick();
   const input=stock.locator('input');
   await expect(input).toHaveValue(original!);
-  const cellBox=await stock.boundingBox(), inputBox=await input.boundingBox();
+  const {cellBox,inputBox}=await input.evaluate(element => {
+    const cell=element.parentElement!.getBoundingClientRect(), editor=element.getBoundingClientRect();
+    return {cellBox:{x:cell.x,y:cell.y,width:cell.width,height:cell.height},
+      inputBox:{x:editor.x,y:editor.y,width:editor.width,height:editor.height}};
+  });
   expect(inputBox!.x).toBeGreaterThanOrEqual(cellBox!.x);
   expect(inputBox!.y).toBeGreaterThanOrEqual(cellBox!.y);
   expect(inputBox!.x+inputBox!.width).toBeLessThanOrEqual(cellBox!.x+cellBox!.width+1);

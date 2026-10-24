@@ -31,6 +31,8 @@ jobs:
         working-directory: frontend
       - run: python scripts/check_docs_locales.py
       - run: mkdocs build --strict
+      - run: npx playwright install --with-deps chromium && npm run test:demo
+        working-directory: frontend
       - uses: actions/upload-pages-artifact@v4
         with:
           path: site
