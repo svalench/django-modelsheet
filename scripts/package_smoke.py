@@ -13,7 +13,10 @@ with tempfile.TemporaryDirectory(prefix="modelsheet-smoke-") as folder:
         [sys.executable, "-m", "venv", "--system-site-packages", str(root / "venv")], check=True
     )
     python = root / "venv" / "bin" / "python"
-    subprocess.run([str(python), "-m", "pip", "install", "--no-deps", str(wheel)], check=True)
+    subprocess.run(
+        [str(python), "-m", "pip", "install", "--no-deps", "--force-reinstall", str(wheel)],
+        check=True,
+    )
     (root / "settings.py").write_text(
         "SECRET_KEY='package-smoke'\n"
         "INSTALLED_APPS=['django.contrib.admin','django.contrib.auth','django.contrib.contenttypes','django.contrib.sessions','django.contrib.messages','django.contrib.staticfiles','modelsheet']\n"
@@ -23,6 +26,17 @@ with tempfile.TemporaryDirectory(prefix="modelsheet-smoke-") as folder:
         "STATIC_URL='/static/'\nSTATIC_ROOT='staticfiles'\nMODELSHEET={'models':[]}\n"
     )
     env = {**os.environ, "DJANGO_SETTINGS_MODULE": "settings", "PYTHONPATH": str(root)}
+    subprocess.run(
+        [
+            str(python),
+            "-c",
+            "import modelsheet, sys; from pathlib import Path; "
+            "assert Path(modelsheet.__file__).resolve().is_relative_to(Path(sys.prefix).resolve()), modelsheet.__file__",
+        ],
+        cwd=root,
+        env=env,
+        check=True,
+    )
     for args in [("migrate", "--noinput"), ("collectstatic", "--noinput")]:
         subprocess.run([str(python), "-m", "django", *args], cwd=root, env=env, check=True)
     for asset in ("sheet.js", "sheet.css", "THIRD_PARTY_LICENSES.txt"):
