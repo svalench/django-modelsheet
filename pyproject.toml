@@ -21,7 +21,7 @@ classifiers = [
 
 [project.urls]
 Repository = "https://github.com/svalench/django-modelsheet"
-Documentation = "https://github.com/svalench/django-modelsheet/blob/main/README.md"
+Documentation = "https://svalench.github.io/django-modelsheet/"
 Issues = "https://github.com/svalench/django-modelsheet/issues"
 Changelog = "https://github.com/svalench/django-modelsheet/blob/main/CHANGELOG.md"
 

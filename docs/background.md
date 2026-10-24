@@ -1,16 +1,20 @@
-# Background adapter contract
+# Фоновые задания
 
-The package includes the worker entry point and persistent operation state, but
-does not bundle a queue, broker, scheduler or Celery dependency. With no adapter,
-operations over bulk_background_threshold fail before building a plan.
+В пакет входят persistent-состояние операций и точка входа worker. Очередь, брокер, планировщик и Celery-зависимость подключаются проектом.
 
-```python
+Без адаптера операция свыше `bulk_background_threshold` отклоняется до построения тяжёлого плана.
+
+## Адаптер проекта
+
+```python title="Пример интеграции, требует функций вашего проекта"
 from django.test import RequestFactory
 from modelsheet.adapters import BackgroundAdapter
 
+# Импортируйте load_authorized_tenant и project_queue из своего проекта.
+
+
 class ProjectBackgroundAdapter(BackgroundAdapter):
     def capture_context(self, request):
-        # Include and validate your tenant/project context here.
         return {"tenant_id": request.tenant.pk}
 
     def restore_context(self, user, context):
@@ -20,33 +24,51 @@ class ProjectBackgroundAdapter(BackgroundAdapter):
         return request
 
     def enqueue(self, operation_id, phase):
-        # Your durable task calls modelsheet.background.process(operation_id, phase).
-        project_queue.enqueue("modelsheet.background.process", operation_id, phase)
+        project_queue.enqueue(
+            "modelsheet.background.process", operation_id, phase
+        )
 ```
 
-Set `MODELSHEET['background_adapter']` to the adapter's dotted path. Never serialize
-a Django request, queryset or pickled user into the queue. The entry point reloads
-an active staff user and registered Admin, then reevaluates permissions and scope.
+```python title="settings.py"
+MODELSHEET["background_adapter"] = (
+    "myproject.modelsheet.ProjectBackgroundAdapter"
+)
+```
 
-Phases are `preview` and `run`. A preview materializes its full candidate set and
-values on the worker, then becomes ready for explicit confirmation. Confirmation
-queues execution of those exact items. Delivery must be at least once; retries and
-expired-worker recovery belong to the queue integration. Enqueue failure produces
-`dispatch_failed` with an operation ID; resume retries dispatch.
+Это контракт интеграции, а не готовый драйвер очереди. Реализуйте авторизованную загрузку tenant и устойчивую доставку задания средствами проекта.
 
-Each worker claims a five-minute lease and a fencing token. Execution uses chunks;
-each row's model write, audit item and completion marker share a transaction.
-Completed items are never reapplied. After a crash, wait until the lease expires
-before resuming; a monitor should requeue abandoned operations. A duplicate message
-cannot execute an unconfirmed plan or rebuild an already completed preview.
+## Контекст доступа
 
-Cancellation takes effect between chunks and preserves completed work. Resume
-continues pending entries, not failed or completed entries. Conflict rows are
-reported; corrections require a new preview. Synchronous execution is all-or-nothing;
-background execution can finish partially. There is no automatic rollback of completed
-chunks. External signals/actions need their own idempotency protocol.
+Не передавайте в очередь Django request, queryset или pickled-пользователя. Сохраните минимальный контекст; точка входа заново загружает активного staff-пользователя, зарегистрированный Admin и проверяет актуальные права и область записей.
 
-Preview building currently materializes up to max_bulk_rows in worker memory and
-uses one transaction to publish the plan. Size the limit for your model and database;
-it is not a streaming engine for unlimited datasets. Aggregates use captured preview
-inputs. A chunk checks current versions of its own target rows before writing.
+Если контекст доступа нельзя восстановить, обработка должна завершиться отказом.
+
+## Предпросмотр и выполнение
+
+| Фаза | Поведение |
+| --- | --- |
+| `preview` | Фиксирует кандидатов и значения; готовый план ожидает явного подтверждения |
+| `run` | Исполняет подтверждённые элементы порциями |
+
+Worker вызывает `modelsheet.background.process(operation_id, phase)`. Очередь должна доставлять задания хотя бы один раз. Повторы и восстановление после истечения lease организует интеграция.
+
+Ошибка постановки даёт `dispatch_failed` и ID операции. Продолжение повторяет постановку в очередь.
+
+## Lease, сбой и повторная доставка
+
+Worker захватывает пятиминутный lease и fencing token. Изменение модели, элемент аудита и отметка выполнения фиксируются совместно. Завершённые элементы повторно не применяются.
+
+После падения дождитесь окончания lease перед продолжением. Монитор очереди должен возвращать брошенные задания в обработку. Дублирующее сообщение не может выполнить неподтверждённый план или пересоздать готовый предпросмотр.
+
+## Отмена и продолжение
+
+Отмена действует между порциями, уже выполненное сохраняется. Продолжение обрабатывает незавершённые элементы, исключая завершённые и ошибочные. Для конфликтных строк создайте новый предпросмотр.
+
+!!! warning "Возможно частичное выполнение"
+    Синхронная операция атомарна, фоновая фиксируется порциями. Автоматического отката выполненных порций нет. Внешним действиям сигналов нужна собственная идемпотентность.
+
+## Память и лимиты
+
+Предпросмотр материализует до `max_bulk_rows` в памяти worker и публикует план одной транзакцией. Это не потоковый движок для неограниченных объёмов. Настройте лимиты под свою модель и БД.
+
+Агрегаты используют сохранённые входные данные предпросмотра. При записи порция сверяет текущие версии собственных целевых строк.

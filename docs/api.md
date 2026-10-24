@@ -1,52 +1,109 @@
 # HTTP API
 
-Routes are relative to `/admin/<app>/<model>/sheet/`. All endpoints use Admin
-sessions and permission checks. Mutations require CSRF and `application/json`.
-Responses have `Cache-Control: no-store`.
+Базовый путь: `/admin/<app>/<model>/sheet/`. Все запросы используют сессию Django Admin и проверки прав. Изменения требуют CSRF и `Content-Type: application/json`. Ответы имеют `Cache-Control: no-store`.
 
-`GET schema/` returns visible concrete fields, editability, safe virtual columns and capabilities.
-`GET rows/` accepts `q`, JSON `filter`, JSON `sort`, `offset`, `limit`, and JSON
-`columns` (displayed field order). It returns rows `{pk,version,values}`, snapshot,
-normalized state, UTC today, count (or null) and has_next.
+## Схема и строки
 
-```json
-{"and":[{"field":"stock","op":"lt","value":10},{"field":"status","op":"eq","value":"ready"}]}
-```
+| Метод | Путь | Результат |
+| --- | --- | --- |
+| GET | `schema/` | Видимые поля, возможность редактирования, виртуальные колонки, capabilities |
+| GET | `rows/` | Строки, версии, снимок и нормализованное состояние |
 
-Filters allow AND/OR groups and eq, ne, lt, lte, gt, gte, in, not_in, isnull,
-contains. They cannot contain ORM paths or custom lookups. Sort is a list such as
-`[{"field":"price","dir":"desc"}]`; PK is an additional stable order.
+`rows/` принимает `q`, JSON-параметры `filter`, `sort`, `columns`, а также `offset` и `limit`. Строка имеет вид `{pk, version, values}`. Ответ содержит snapshot, UTC today, count (или null) и has_next.
+
+### Фильтр
 
 ```json
 {
-  "snapshot":"snapshot-uuid",
-  "view_state":{"q":"","filter":{},"sort":[],"offset":0,"limit":200,"columns":["name","price"]},
-  "idempotency_key":"client-generated-unique-key",
-  "changes":[{"pk":"42","version":"loaded-row-fingerprint","values":{"price":"=[price]*1.07"}}]
+  "and": [
+    {"field": "stock", "op": "lt", "value": 10},
+    {"field": "status", "op": "eq", "value": "ready"}
+  ]
 }
 ```
 
-POST this to `save/`. Each row appears once; all fields are validated together;
-the request is atomic. Submit the exact same body and idempotency key after a lost
-response. Reusing a key with different content is a 409 conflict. Retrying after an
-operation is purged is outside the idempotency retention window.
+Группы: AND/OR. Операторы: `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `in`, `not_in`, `isnull`, `contains`. ORM-пути и произвольные lookups не допускаются.
 
-`POST bulk/preview/` accepts `{idempotency_key,state,assignments,selection,snapshot}`.
-Selection is null for all matching rows, or a list of PKs from the supplied snapshot.
-Assignments map editable field names to scalar constants or expressions. State
-uses the same filters/search/order as rows. Preview is read-only for user models.
+Сортировка: `[{"field":"price","dir":"desc"}]`. В конец добавляется стабильный порядок по PK. `columns` определяет порядок отображаемых полей, важный для позиционных формул.
 
-`POST bulk/run/` accepts `{operation: "operation-uuid"}`; this is the explicit
-confirmation of an immutable plan. Repeated calls do not repeat its effects.
-`GET operations/<uuid>/?offset=0` returns counters, status and up to 200 visible
-items. Each item includes before/after for currently visible fields only.
-Use next_offset for subsequent item pages; it remains valid when row access hides items.
-`POST operations/<uuid>/cancel/` and `/resume/` accept `{}` and are owner-only.
-`GET history/?offset=0` returns up to 20 operations and requires history permission.
-Reading another user's operation also requires history permission.
+## Атомарное сохранение
 
-Errors are `{error:{code,message,pk?,field?,details?}}`. Typical statuses:
-400 parse/validation, 403 permission, 404 unavailable operation/model, 409 version,
-snapshot, confirmation or idempotency conflict, 413 payload size, 429 rate limit,
-503 busy database/queue/configuration. Constraint errors without a reliable field
-mapping attach to the row. Clients retain edits after any failed save.
+`POST save/`:
+
+```json
+{
+  "snapshot": "snapshot-uuid",
+  "view_state": {
+    "q": "",
+    "filter": {},
+    "sort": [],
+    "offset": 0,
+    "limit": 200,
+    "columns": ["name", "price"]
+  },
+  "idempotency_key": "client-generated-unique-key",
+  "changes": [
+    {
+      "pk": "42",
+      "version": "loaded-row-fingerprint",
+      "values": {"price": "=[price]*1.07"}
+    }
+  ]
+}
+```
+
+Подставляйте реальные `snapshot`, `view_state` и `version` из загрузки строк. Каждая запись включается один раз. Все её поля валидируются вместе, весь запрос атомарен.
+
+PK идентифицирует запись независимо от позиции в таблице. Decimal передаётся строкой, даты — ISO 8601. Неизвестные и запрещённые поля отклоняются явно.
+
+!!! tip "Повтор после потери ответа"
+    Повторите ровно тот же body с тем же `idempotency_key`. Другие данные с прежним ключом дают 409. После удаления операции по сроку хранения гарантия повторного запуска по старому ключу не действует.
+
+## Предпросмотр и выполнение
+
+| Метод | Путь | Body |
+| --- | --- | --- |
+| POST | `bulk/preview/` | `{idempotency_key, state, assignments, selection, snapshot}` |
+| POST | `bulk/run/` | `{"operation":"operation-uuid"}` |
+
+`state` использует поиск, фильтр и порядок как в `rows/`. `assignments` сопоставляет редактируемым полям константы или формулы. `selection: null` выбирает все совпадения; список PK ограничивает выбор строками указанного снимка.
+
+Предпросмотр не меняет пользовательские модели. Выполнение принимает ID готового плана, не повторно присланные условия. Повторный запуск не повторяет эффект.
+
+## Отчёты и управление
+
+| Метод | Путь | Назначение |
+| --- | --- | --- |
+| GET | `operations/<uuid>/?offset=0` | Статус, счётчики, до 200 доступных элементов |
+| POST | `operations/<uuid>/cancel/` | Отмена, body `{}` |
+| POST | `operations/<uuid>/resume/` | Продолжение, body `{}` |
+| GET | `history/?offset=0` | До 20 операций, требуется право истории |
+
+Для страниц элементов используйте `next_offset`: он учитывает скрытые по доступу записи. Before/after содержат только поля, доступные пользователю сейчас. Чтение чужой операции требует права истории; отмена и продолжение доступны автору.
+
+## Ошибки
+
+```json
+{
+  "error": {
+    "code": "example_code",
+    "message": "Описание ошибки",
+    "pk": "42",
+    "field": "price"
+  }
+}
+```
+
+`pk`, `field`, `details` необязательны. Если ограничение БД нельзя надёжно связать с полем, ошибка относится к строке.
+
+| HTTP | Причина |
+| --- | --- |
+| 400 | Разбор запроса или валидация |
+| 403 | Права доступа |
+| 404 | Недоступная операция или модель |
+| 409 | Конфликт версии, снимка, подтверждения или ключа |
+| 413 | Превышен размер запроса |
+| 429 | Ограничение частоты |
+| 503 | Занятая БД, очередь или конфигурация |
+
+Клиент должен сохранять локальный буфер после любого неуспешного сохранения.

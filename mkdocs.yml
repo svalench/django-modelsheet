@@ -1,0 +1,87 @@
+site_name: django-modelsheet
+site_description: Табличный режим для Django Admin. Установка, формулы и массовые изменения с предпросмотром.
+site_url: https://svalench.github.io/django-modelsheet/
+repo_url: https://github.com/svalench/django-modelsheet
+repo_name: svalench/django-modelsheet
+edit_uri: edit/main/docs/
+copyright: MIT · django-modelsheet
+theme:
+  name: material
+  custom_dir: docs/overrides
+  language: ru
+  font: false
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
+  palette:
+    - scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Включить тёмную тему
+    - scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Включить светлую тему
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+    - content.action.edit
+plugins:
+  - search:
+      lang: [ru, en]
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+extra_css:
+  - stylesheets/extra.css
+extra_javascript:
+  - javascripts/examples.js
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/svalench/django-modelsheet
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/django-modelsheet/
+nav:
+  - Обзор: index.md
+  - Начало работы:
+      - Установка за 5 минут: guide/quickstart.md
+      - Демопроект: guide/demo.md
+      - Настройки: guide/configuration.md
+  - Руководство:
+      - Работа с таблицей: guide/editing.md
+      - Формулы на примерах: guide/formulas.md
+      - Массовые изменения: guide/bulk.md
+      - Права и целостность: guide/permissions.md
+      - Решение проблем: guide/troubleshooting.md
+  - API и расширения:
+      - HTTP API: api.md
+      - Адаптеры и интеграция: extensions.md
+      - Фоновые задания: background.md
+      - Спецификация формул: formulas.md
+  - О проекте:
+      - Версия и ограничения: guide/releases.md
+      - Разработка документации: guide/documentation.md
+      - Проверки (EN): validation.md
+      - Бенчмарки (EN): benchmarks.md
+      - Выпуск пакета (EN): releasing.md
