@@ -1,5 +1,16 @@
 # Release and limitations
 
+## 0.3.0a2 · 24 October 2026
+
+Fixes unchanged numeric cells appearing as modified, editor overflow and formula-bar updates during keyboard navigation. The live demo keeps cell identities stable after editing. Adds browser regression coverage and the documentation playground.
+
+[Install from PyPI](https://pypi.org/project/django-modelsheet/0.3.0a2/){ .md-button .md-button--primary }
+[GitHub Release](https://github.com/svalench/django-modelsheet/releases/tag/v0.3.0a2){ .md-button }
+
+```bash
+python -m pip install --upgrade django-modelsheet==0.3.0a2
+```
+
 ## 0.3.0a1 · 24 October 2026
 
 The first public alpha combines range editing, a local buffer, safe saves, formulas and previewed bulk operations.

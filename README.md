@@ -3,7 +3,7 @@
 Spreadsheet editing for explicitly registered Django Admin models: cell/range editing,
 local undo/redo, Decimal formulas, server-side filters, and previewed bulk changes.
 
-**0.3.0a1 is an alpha**, available on [PyPI](https://pypi.org/project/django-modelsheet/0.3.0a1/).
+**0.3.0a2 is an alpha**, available on [PyPI](https://pypi.org/project/django-modelsheet/0.3.0a2/).
 The repository includes a working demo, compiled assets, tests, and a compatibility CI matrix.
 
 **[Documentation website →](https://svalench.github.io/django-modelsheet/)** —
@@ -14,7 +14,7 @@ installation, examples, formulas, bulk operations and extension APIs in English,
 Install the current alpha (or `pip install .` from this repository):
 
 ```sh
-pip install django-modelsheet==0.3.0a1
+pip install django-modelsheet==0.3.0a2
 ```
 
 ```python

@@ -5,7 +5,7 @@
 ## 1. Усталюйце альфу
 
 ```bash
-python -m pip install django-modelsheet==0.3.0a1
+python -m pip install django-modelsheet==0.3.0a2
 ```
 
 Пакет утрымлівае гатовыя JS/CSS. Для ўсталявання не патрэбныя Node.js, npm або CDN. Без уласнага праекта пачніце з [дэмапраекта](demo.md).

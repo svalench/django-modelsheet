@@ -5,7 +5,7 @@ Connect an existing `shop.Product` model: edit price and stock, keep the name re
 ## 1. Install the alpha
 
 ```bash
-python -m pip install django-modelsheet==0.3.0a1
+python -m pip install django-modelsheet==0.3.0a2
 ```
 
 The package includes compiled JavaScript/CSS. Installing it requires no Node.js, npm or CDN. To try without an existing project, use the [demo](demo.md).

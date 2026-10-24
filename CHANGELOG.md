@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0a2 — 2026-10-24
+
+- Keep unchanged numeric cells out of the local change buffer.
+- Constrain cell editors to their cells and reset inherited form styles.
+- Synchronize the formula bar with Tabulator keyboard navigation and selection.
+- Preserve live-demo cell identities after editing so arrow and Tab navigation remain reliable.
+- Add browser regression coverage for editor layout, no-op edits and keyboard workflows.
+- Include the live documentation playground in English, Simplified Chinese and Belarusian.
+
 ## 0.3.0a1 — 2026-10-24
 
 - Initial Django package, explicit Admin registration, precompiled static assets.

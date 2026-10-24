@@ -1,5 +1,16 @@
 # 版本与限制
 
+## 0.3.0a2 · 2026 年 10 月 24 日
+
+修复未修改的数字单元格被标记为已修改、编辑器溢出和键盘导航时公式栏未更新的问题。在线演示在编辑后保持单元格标识稳定，并新增浏览器回归测试。
+
+[从 PyPI 安装](https://pypi.org/project/django-modelsheet/0.3.0a2/){ .md-button .md-button--primary }
+[GitHub Release](https://github.com/svalench/django-modelsheet/releases/tag/v0.3.0a2){ .md-button }
+
+```bash
+python -m pip install --upgrade django-modelsheet==0.3.0a2
+```
+
 ## 0.3.0a1 · 2026 年 10 月 24 日
 
 首个公开 Alpha 版包含区域编辑、本地缓冲、安全保存、公式和带预览的批量操作。

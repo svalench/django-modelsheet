@@ -5,7 +5,7 @@
 ## 1. 安装 Alpha 版
 
 ```bash
-python -m pip install django-modelsheet==0.3.0a1
+python -m pip install django-modelsheet==0.3.0a2
 ```
 
 软件包包含编译后的 JS/CSS，无需 Node.js、npm 或 CDN。没有现成项目时，可先运行[演示项目](demo.md)。
