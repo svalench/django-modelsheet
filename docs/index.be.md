@@ -17,7 +17,7 @@ hide:
 
 <div class="ms-actions" markdown>
 [Пачаць працу →](guide/quickstart.md){ .md-button .md-button--primary }
-[Паглядзець прыклады](guide/formulas.md){ .md-button }
+[Паспрабаваць дэма](playground.md){ .md-button }
 </div>
 
 <div class="ms-install"><span>$</span><code>pip install django-modelsheet==0.3.0a1</code></div>

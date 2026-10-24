@@ -1,0 +1,3 @@
+docs/assets/playground/* linguist-generated=true
+# Vendor template literals contain meaningful trailing spaces; keep them intact.
+docs/assets/playground/demo.js whitespace=-blank-at-eol

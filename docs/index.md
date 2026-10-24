@@ -17,7 +17,7 @@ Edit your models like a spreadsheet: select ranges, write formulas and preview b
 
 <div class="ms-actions" markdown>
 [Get started →](guide/quickstart.md){ .md-button .md-button--primary }
-[Explore examples](guide/formulas.md){ .md-button }
+[Try live demo](playground.md){ .md-button }
 </div>
 
 <div class="ms-install"><span>$</span><code>pip install django-modelsheet==0.3.0a1</code></div>
