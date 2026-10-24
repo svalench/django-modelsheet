@@ -2,7 +2,7 @@
 
 ## PyPI Trusted Publishing setup
 
-The publishing workflow is `.github/workflows/publish.yml`. `ci.yml` only runs tests
+The publishing workflow is `.github/workflows/workflow.yml`. `ci.yml` only runs tests
 and cannot publish a package.
 
 For the first upload, add a pending publisher at
@@ -13,7 +13,7 @@ https://pypi.org/manage/account/publishing/ with these exact values:
 | PyPI project name | `django-modelsheet` |
 | GitHub owner | `svalench` |
 | Repository name | `django-modelsheet` |
-| Workflow name (filename, without the directory) | `publish.yml` |
+| Workflow name (filename, without the directory) | `workflow.yml` |
 | Environment name | `pypi` |
 
 If the project already belongs to your PyPI account, add the publisher through its
