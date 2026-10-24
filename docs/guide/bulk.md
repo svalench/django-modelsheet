@@ -1,57 +1,43 @@
-# Массовые изменения
+# Bulk operations
 
-Пример: найти готовые товары с остатком меньше 10, поднять цену на 7% и перевести статус в `order`.
+Example: find ready products with stock below 10, increase price by 7%, and set status to `order`.
 
-## 1. Задайте область действия
+## 1. Choose the scope
 
-В **Bulk change** выберите выделенные строки текущей страницы или все записи, соответствующие условиям, включая другие страницы.
+In **Bulk change**, select highlighted page rows or all matching records, including other pages. Querysets, current permissions and the project policy always bound the scope.
 
-```json title="Условие в терминах API"
-{
-  "and": [
-    {"field": "stock", "op": "lt", "value": 10},
-    {"field": "status", "op": "eq", "value": "ready"}
-  ]
-}
+```json title="Equivalent API condition"
+{"and":[{"field":"stock","op":"lt","value":10},{"field":"status","op":"eq","value":"ready"}]}
 ```
 
-Область всегда ограничивается `ModelAdmin.get_queryset()`, текущими правами и политикой проекта.
+## 2. Add assignments
 
-## 2. Укажите присваивания
-
-| Поле | Новое значение |
+| Field | New value |
 | --- | --- |
 | `price` | `=ROUND([price]*1.07,2)` |
 | `status` | `order` |
 
-Все присваивания вычисляются из исходного состояния. Вторая формула не читает уже изменённое значение первой.
+Every assignment reads original data; assignment order has no effect.
 
-## 3. Постройте предпросмотр
+## 3. Preview
 
-Предпросмотр фиксирует полный набор PK, исходные версии, рассчитанные значения и ошибки. Интерфейс показывает количество и первые 50 строк.
+The preview freezes all candidate PKs, source versions, calculated changes and errors. The UI shows the count and first 50 results. Newly matching products are not added later. Changing conditions or formulas requires a new preview.
 
-Новые товары, которые начнут соответствовать фильтру после предпросмотра, в план не попадут. Изменение условия или формулы требует нового предпросмотра.
+## 4. Confirm
 
-## 4. Подтвердите план
+Execution takes the prepared operation ID. Repeating it does not apply the markup twice. Access and row versions are checked again before writing. Changed records produce conflicts; correcting them requires a new plan.
 
-Выполнение получает ID готовой операции. Повторный вызов той же операции не применяет наценку второй раз. Перед записью сервер повторно проверяет доступ и исходное состояние записей.
+## 5. Review the report
 
-!!! warning "Изменившиеся данные"
-    Если товар изменился после предпросмотра, сервер не перезапишет его молча. Конфликт попадает в результат операции; исправление требует нового плана.
+History contains status, counters, row outcomes and errors. Current permissions govern both history and visible fields.
 
-## 5. Проверьте отчёт
-
-Операция хранит статус, счётчики, результаты по строкам и ошибки. Доступ к истории и её полям проверяется по текущим правам.
-
-| Режим | Гарантия |
+| Mode | Guarantee |
 | --- | --- |
-| Синхронный | Все изменения фиксируются одной транзакцией либо откатываются |
-| Фоновый | Результаты фиксируются порциями; возможно частичное выполнение |
+| Synchronous | One transaction; all or nothing |
+| Background | Commits in chunks; partial completion is possible |
 
-## Большие операции
+## Large operations
 
-По умолчанию порог фона — 5000 строк, порция — 200. Без настроенного `BackgroundAdapter` превышение порога отклоняется до тяжёлой обработки. Крупный предпросмотр также строится через адаптер.
+Default background threshold: 5000 rows; chunk size: 200. Without a `BackgroundAdapter`, exceeding the threshold fails before expensive planning. Large previews use the adapter too. A queue and Celery worker are not bundled.
 
-Отмена останавливает дальнейшие порции и не откатывает выполненные. Продолжение обрабатывает незавершённые элементы, не повторяя успешные. Готовые Celery-воркер и брокер в пакет не входят.
-
-Подробнее: [контракт фонового адаптера](../background.md), [эндпоинты API](../api.md).
+Cancel stops future chunks without undoing completed changes. Resume processes unfinished entries without repeating successful ones. See the [background contract](../background.md) and [HTTP API](../api.md).

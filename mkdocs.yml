@@ -1,5 +1,5 @@
 site_name: django-modelsheet
-site_description: Табличный режим для Django Admin. Установка, формулы и массовые изменения с предпросмотром.
+site_description: Spreadsheet editing for Django Admin. Installation, formulas and previewed bulk operations.
 site_url: https://svalench.github.io/django-modelsheet/
 repo_url: https://github.com/svalench/django-modelsheet
 repo_name: svalench/django-modelsheet
@@ -8,80 +8,178 @@ copyright: MIT · django-modelsheet
 theme:
   name: material
   custom_dir: docs/overrides
-  language: ru
+  language: en
   font: false
   logo: assets/logo.svg
   favicon: assets/logo.svg
   palette:
-    - scheme: default
-      primary: teal
-      accent: teal
-      toggle:
-        icon: material/weather-night
-        name: Включить тёмную тему
-    - scheme: slate
-      primary: teal
-      accent: teal
-      toggle:
-        icon: material/weather-sunny
-        name: Включить светлую тему
+  - scheme: default
+    primary: teal
+    accent: teal
+    toggle:
+      icon: material/weather-night
+      name: Switch to dark mode
+  - scheme: slate
+    primary: teal
+    accent: teal
+    toggle:
+      icon: material/weather-sunny
+      name: Switch to light mode
   features:
-    - navigation.tabs
-    - navigation.sections
-    - navigation.indexes
-    - navigation.top
-    - navigation.footer
-    - search.suggest
-    - search.highlight
-    - content.code.copy
-    - content.tabs.link
-    - content.action.edit
+  - navigation.tabs
+  - navigation.sections
+  - navigation.indexes
+  - navigation.top
+  - navigation.footer
+  - search.suggest
+  - search.highlight
+  - content.code.copy
+  - content.tabs.link
+  - content.action.edit
 plugins:
-  - search:
-      lang: [ru, en]
+- i18n:
+    docs_structure: suffix
+    fallback_to_default: true
+    reconfigure_search: false
+    languages:
+    - locale: en
+      default: true
+      name: English
+      build: true
+    - locale: zh
+      name: 简体中文
+      build: true
+      site_description: Django Admin 的电子表格视图：安装、公式和带预览的批量操作。
+      nav_translations:
+        Overview: 概览
+        Getting started: 快速开始
+        Installation in 5 minutes: 五分钟安装
+        Demo project: 演示项目
+        Configuration: 配置
+        User guide: 使用指南
+        Editing the sheet: 编辑表格
+        Formula recipes: 公式示例
+        Bulk operations: 批量操作
+        Permissions and integrity: 权限与数据完整性
+        Troubleshooting: 故障排查
+        API and extensions: API 与扩展
+        HTTP API: HTTP API
+        Adapters and integration: 适配器与集成
+        Background jobs: 后台任务
+        Formula specification: 公式规范
+        Project: 项目
+        Release and limitations: 版本与限制
+        Contributing to the docs: 参与文档维护
+        Validation report: 验证报告
+        Benchmarks: 性能基准
+        Publishing the package: 发布软件包
+      theme:
+        language: zh
+        palette:
+        - scheme: default
+          primary: teal
+          accent: teal
+          toggle:
+            icon: material/weather-night
+            name: 切换到深色模式
+        - scheme: slate
+          primary: teal
+          accent: teal
+          toggle:
+            icon: material/weather-sunny
+            name: 切换到浅色模式
+    - locale: be
+      name: Беларуская
+      build: true
+      site_description: 'Таблічны рэжым Django Admin: усталяванне, формулы і масавыя аперацыі з папярэднім
+        праглядам.'
+      nav_translations:
+        Overview: Агляд
+        Getting started: Пачатак працы
+        Installation in 5 minutes: Усталяванне за 5 хвілін
+        Demo project: Дэмапраект
+        Configuration: Налады
+        User guide: Кіраўніцтва
+        Editing the sheet: Праца з табліцай
+        Formula recipes: Прыклады формул
+        Bulk operations: Масавыя аперацыі
+        Permissions and integrity: Правы і цэласнасць
+        Troubleshooting: Вырашэнне праблем
+        API and extensions: API і пашырэнні
+        HTTP API: HTTP API
+        Adapters and integration: Адаптары і інтэграцыя
+        Background jobs: Фонавыя заданні
+        Formula specification: Спецыфікацыя формул
+        Project: Пра праект
+        Release and limitations: Версія і абмежаванні
+        Contributing to the docs: Развіццё дакументацыі
+        Validation report: Справаздача праверак
+        Benchmarks: Тэсты прадукцыйнасці
+        Publishing the package: Публікацыя пакета
+      theme:
+        language: be
+        palette:
+        - scheme: default
+          primary: teal
+          accent: teal
+          toggle:
+            icon: material/weather-night
+            name: Уключыць цёмную тэму
+        - scheme: slate
+          primary: teal
+          accent: teal
+          toggle:
+            icon: material/weather-sunny
+            name: Уключыць светлую тэму
+- search:
+    lang:
+    - en
+    - zh
+    # Lunr has no Belarusian module; ru adds Cyrillic search support, not a site language.
+    - ru
 markdown_extensions:
-  - admonition
-  - attr_list
-  - md_in_html
-  - toc:
-      permalink: true
-  - pymdownx.details
-  - pymdownx.superfences
-  - pymdownx.highlight:
-      anchor_linenums: true
-  - pymdownx.inlinehilite
-  - pymdownx.tabbed:
-      alternate_style: true
+- admonition
+- attr_list
+- md_in_html
+- toc:
+    permalink: true
+- pymdownx.details
+- pymdownx.superfences
+- pymdownx.highlight:
+    anchor_linenums: true
+- pymdownx.inlinehilite
+- pymdownx.tabbed:
+    alternate_style: true
 extra_css:
-  - stylesheets/extra.css
+- stylesheets/extra.css
 extra_javascript:
-  - javascripts/examples.js
+- javascripts/examples.js
 extra:
   social:
-    - icon: fontawesome/brands/github
-      link: https://github.com/svalench/django-modelsheet
-    - icon: fontawesome/brands/python
-      link: https://pypi.org/project/django-modelsheet/
+  - icon: fontawesome/brands/github
+    link: https://github.com/svalench/django-modelsheet
+  - icon: fontawesome/brands/python
+    link: https://pypi.org/project/django-modelsheet/
 nav:
-  - Обзор: index.md
-  - Начало работы:
-      - Установка за 5 минут: guide/quickstart.md
-      - Демопроект: guide/demo.md
-      - Настройки: guide/configuration.md
-  - Руководство:
-      - Работа с таблицей: guide/editing.md
-      - Формулы на примерах: guide/formulas.md
-      - Массовые изменения: guide/bulk.md
-      - Права и целостность: guide/permissions.md
-      - Решение проблем: guide/troubleshooting.md
-  - API и расширения:
-      - HTTP API: api.md
-      - Адаптеры и интеграция: extensions.md
-      - Фоновые задания: background.md
-      - Спецификация формул: formulas.md
-  - О проекте:
-      - Версия и ограничения: guide/releases.md
-      - Разработка документации: guide/documentation.md
-      - Проверки (EN): validation.md
-      - Бенчмарки (EN): benchmarks.md
-      - Выпуск пакета (EN): releasing.md
+- Overview: index.md
+- Getting started:
+  - Installation in 5 minutes: guide/quickstart.md
+  - Demo project: guide/demo.md
+  - Configuration: guide/configuration.md
+- User guide:
+  - Editing the sheet: guide/editing.md
+  - Formula recipes: guide/formulas.md
+  - Bulk operations: guide/bulk.md
+  - Permissions and integrity: guide/permissions.md
+  - Troubleshooting: guide/troubleshooting.md
+- API and extensions:
+  - HTTP API: api.md
+  - Adapters and integration: extensions.md
+  - Background jobs: background.md
+  - Formula specification: formulas.md
+- Project:
+  - Release and limitations: guide/releases.md
+  - Contributing to the docs: guide/documentation.md
+  - Validation report: validation.md
+  - Benchmarks: benchmarks.md
+  - Publishing the package: releasing.md

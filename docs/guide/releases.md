@@ -1,54 +1,43 @@
-# Версия и ограничения
+# Release and limitations
 
-## 0.3.0a1 · 24 октября 2026
+## 0.3.0a1 · 24 October 2026
 
-Первая публичная альфа объединяет основные этапы v0.1–v0.3: редактирование диапазонов, локальный буфер, безопасное сохранение, формулы и массовые операции с предпросмотром.
+The first public alpha combines range editing, a local buffer, safe saves, formulas and previewed bulk operations.
 
-[Установить из PyPI](https://pypi.org/project/django-modelsheet/0.3.0a1/){ .md-button .md-button--primary }
+[Install from PyPI](https://pypi.org/project/django-modelsheet/0.3.0a1/){ .md-button .md-button--primary }
 [GitHub Release](https://github.com/svalench/django-modelsheet/releases/tag/v0.3.0a1){ .md-button }
 
 ```bash
 python -m pip install django-modelsheet==0.3.0a1
 ```
 
-## Что входит
+Includes explicit model registration, clipboard/fill-down/undo, Decimal calculations, server queries, conflict detection, immutable plans, audit, idempotency and a background adapter contract. Compiled assets, the demo and MIT license are included.
 
-- Табличный режим явно разрешённых моделей Django Admin.
-- Вставка диапазонов, Fill Down, локальные undo/redo и сохранение.
-- Decimal-формулы, виртуальные колонки и серверный пересчёт.
-- Серверные поиск, AND/OR-фильтры и сортировка.
-- Защита от конкурентной перезаписи и атомарное сохранение.
-- Неизменяемые планы массовых операций, аудит и идемпотентность.
-- Контракт фонового адаптера, отмена и продолжение.
-- Готовая статика, демопроект и MIT-лицензия.
+## Compatibility
 
-## Совместимость
-
-| Компонент | Матрица проекта |
+| Component | Project matrix |
 | --- | --- |
 | Django 5.2 | Python 3.11–3.14 |
 | Django 6.0 / 6.1 | Python 3.12–3.14 |
-| Базы данных | PostgreSQL, MySQL/InnoDB, SQLite |
-| Установка | Python wheel/sdist, без Node.js |
+| Databases | PostgreSQL, MySQL/InnoDB, SQLite |
+| Installation | wheel/sdist; no Node.js |
 
-Проверяйте результат нужной комбинации в [GitHub Actions](https://github.com/svalench/django-modelsheet/actions/workflows/ci.yml). Детали локальных проверок и их границы приведены в [отчёте](../validation.md).
+Check your combination in [CI](https://github.com/svalench/django-modelsheet/actions/workflows/ci.yml); local checks and boundaries are in the [validation report](../validation.md).
 
-## Границы альфы
+## Alpha boundaries
 
-| Возможность | Текущее поведение |
+| Capability | Current behavior |
 | --- | --- |
-| Создание и удаление | Через стандартный Admin |
-| FK | Разрешённые отображение и фильтрация; без редактора |
-| M2M | Редактор отсутствует |
-| Формулы | Однократная запись результата или виртуальная колонка |
-| Undo | Только локальный буфер до сохранения |
-| Импорт/экспорт файлов | Не входит; TSV clipboard доступен |
-| Фоновая очередь | Подключается адаптером проекта |
-| Несколько БД | Операция только в `default` |
-| Сортировка виртуальных колонок | Не поддерживается |
+| Create/delete | Standard Admin |
+| FK | Permitted display/filtering; no editor |
+| M2M | No editor |
+| Formulas | One-time values or computed columns |
+| Undo | Local buffer before saving |
+| File import/export | Deferred; TSV clipboard is available |
+| Background queue | Provided by the project adapter |
+| Multiple databases | Operations use `default` only |
+| Computed-column sorting | Unsupported |
 
-## Развитие проекта
+Server undo, relationship editors, import/export, fast-save, persistent formulas and cursor pagination are future directions, not dated promises.
 
-Для следующих версий отложены серверный undo, FK/M2M-редактирование, импорт/экспорт, fast-save, постоянные формулы и курсорная пагинация. Это направления развития, а не обещание сроков.
-
-[Исходный код](https://github.com/svalench/django-modelsheet) · [Changelog](https://github.com/svalench/django-modelsheet/blob/main/CHANGELOG.md) · [CONTRIBUTING](https://github.com/svalench/django-modelsheet/blob/main/CONTRIBUTING.md) · [SECURITY](https://github.com/svalench/django-modelsheet/blob/main/SECURITY.md)
+[Source](https://github.com/svalench/django-modelsheet) · [Changelog](https://github.com/svalench/django-modelsheet/blob/main/CHANGELOG.md) · [Contributing](https://github.com/svalench/django-modelsheet/blob/main/CONTRIBUTING.md) · [Security](https://github.com/svalench/django-modelsheet/blob/main/SECURITY.md)

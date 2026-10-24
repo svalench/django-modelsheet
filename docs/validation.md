@@ -1,5 +1,8 @@
 # Local validation — 2026-10-24
 
+!!! info "Historical local report"
+    This records checks before the public release. Version 0.3.0a1 is now available on [PyPI](https://pypi.org/project/django-modelsheet/0.3.0a1/). For subsequent remote runs, consult [GitHub Actions](https://github.com/svalench/django-modelsheet/actions).
+
 Package: **0.3.0a1**. Environment: macOS arm64, Python 3.13.7, Django 6.0.4,
 SQLite, Node 22.19.0, npm 10.9.3. Frontend dependency versions are pinned in
 frontend/package-lock.json. Browser tests used an existing Chromium installation

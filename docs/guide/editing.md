@@ -1,56 +1,44 @@
-# Работа с таблицей
+# Editing the sheet
 
-Таблица показывает существующие записи модели. Каждая запись определяется первичным ключом, а номера строк помогают ориентироваться в текущей загруженной странице.
+The sheet edits existing records. A primary key identifies each record; row numbers refer to the loaded page.
 
-## Редактирование и сохранение
+## Local edits and Save
 
-Дважды нажмите на ячейку или используйте строку формул. Изменения накапливаются в локальном буфере. **Save** отправляет их одним атомарным запросом: сохраняются все строки запроса либо ни одна.
+Double-click a cell or use the formula bar. Edits remain in a local buffer until **Save** sends one atomic request: every changed row is saved or the entire request rolls back. Validation errors keep your buffer so you can correct and retry. Undo/redo applies before saving.
 
-Если валидация не прошла, правки остаются на экране. Исправьте значение и повторите сохранение. Undo/redo работает с буфером до сохранения.
-
-| Действие | Клавиши |
+| Action | Shortcut |
 | --- | --- |
-| Навигация | Стрелки, Tab, Enter |
-| Расширение выделения | Shift + навигация |
-| Сохранить | Ctrl/Cmd+S |
-| Отменить локальное изменение | Ctrl/Cmd+Z |
-| Повторить | Ctrl/Cmd+Y |
-| Заполнить вниз | Ctrl/Cmd+D |
-| Копировать / вставить | Ctrl/Cmd+C / Ctrl/Cmd+V |
+| Navigate | Arrows, Tab, Enter |
+| Extend selection | Shift + navigation |
+| Save | Ctrl/Cmd+S |
+| Undo / redo | Ctrl/Cmd+Z / Ctrl/Cmd+Y |
+| Fill down | Ctrl/Cmd+D |
+| Copy / paste | Ctrl/Cmd+C / Ctrl/Cmd+V |
 
-## Копирование из Excel
+## Clipboard and fill down
 
-Выделите диапазон в Excel или другой таблице, скопируйте его и вставьте в выбранную ячейку. Используется TSV: табуляция разделяет колонки, перевод строки — записи.
+Copy a range from Excel and paste into the active cell. TSV uses tabs for columns and newlines for rows:
 
-```text title="Пример вставки в колонки price и stock"
+```text title="Values for price and stock"
 1200.00	10
 850.50	25
 3400.00	8
 ```
 
-Ячейки только для чтения пропускаются с уведомлением. Доступные изменения сохраняются общим запросом.
+Read-only cells are skipped with a notification. The remaining changes are saved together.
 
-!!! tip "Формат значений"
-    Десятичный разделитель — точка, даты — ISO 8601, например `2026-10-24`. Пустая ячейка становится `NULL` у nullable-поля; у текстового поля — пустой строкой; для остальных типов может вызвать ошибку валидации.
+Use a decimal point and ISO 8601 dates such as `2026-10-24`. Empty pasted values become NULL for nullable fields, empty strings for text fields, or validation errors for other types. Prefix literal text starting with `=` with an apostrophe: `'=SUM(A1:A2)`.
 
-Чтобы записать текст, начинающийся с `=`, поставьте апостроф: `'=SUM(A1:A2)`.
+For fill down, enter the top value/formula, select the vertical range, and press Ctrl/Cmd+D. Relative references shift; absolute references stay fixed. See [cell references](formulas.md#cell-references).
 
-## Заполнение вниз
+## Search, filters and sorting
 
-Введите значение или формулу в верхнюю ячейку, выделите вертикальный диапазон и нажмите Ctrl/Cmd+D. Относительные ссылки сдвигаются, абсолютные остаются на месте. [Подробнее о ссылках](formulas.md#cell-references).
+Search runs on the server against permitted `search_fields`. Filters support AND/OR groups. Multi-sort adds PK as a stable tie-breaker.
 
-## Поиск, фильтры и сортировка
+Use **Sort**, or Alt+click a header; Alt+Shift+click adds a sort field. Ordinary header clicks select columns. Column widths, visibility and frozen columns are adjustable; view state is stored in the URL.
 
-Поиск выполняется на сервере по разрешённым `search_fields`. Фильтры поддерживают группы AND/OR. Сортировка может включать несколько полей; дополнительный порядок по PK делает страницы стабильными.
+Save or discard the buffer before changing the page, filter or order. Positional formulas belong to their loaded snapshot; copying them across snapshots is restricted.
 
-Используйте **Sort** для списка полей сортировки. Alt+нажатие на заголовок сортирует колонку, Alt+Shift+нажатие добавляет её к порядку. Обычное нажатие на заголовок выделяет колонку.
+## Standard Admin
 
-Ширину, видимость и закрепление колонок можно менять. Состояние представления хранится в URL.
-
-Перед сменой страницы, фильтра или порядка сохраните либо отбросьте буфер. Позиционные формулы привязаны к загруженному снимку, поэтому перенос между разными снимками ограничен.
-
-## Возврат в стандартный Admin
-
-**Ordinary Admin** переносит условия, порядок и страницу, только если стандартный список может представить их точно. Для неподдерживаемой комбинации переход блокируется с объяснением.
-
-Создание и удаление записей выполняются в стандартном Admin. [Ограничения интеграции](../extensions.md).
+**Ordinary Admin** transfers conditions, order and page only when they can be represented exactly. Unsupported states block the switch with an explanation. Create and delete records in standard Admin. See [integration boundaries](../extensions.md).

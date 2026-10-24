@@ -1,51 +1,41 @@
-# Решение проблем
+# Troubleshooting
 
-## Не вижу кнопку Spreadsheet
+## Spreadsheet button is missing
 
-Проверьте последовательно:
+Check that `modelsheet` is installed and migrated, `app.Model` is allowlisted, the registered Admin extends `ModelSheetAdmin`, and `sheet_fields` and user permissions are configured. Run `python manage.py check`.
 
-1. `modelsheet` находится в `INSTALLED_APPS`, миграции применены.
-2. `app.Model` включена в `MODELSHEET["models"]`.
-3. Зарегистрированный класс Admin наследует `ModelSheetAdmin`.
-4. Указаны `sheet_fields`, пользователь активен и имеет нужные [права](permissions.md).
-5. `python manage.py check` не сообщает ошибок конфигурации.
+## A field is read-only
 
-## Таблица есть, но поля не редактируются
+It must be in `sheet_editable`. `readonly_fields`, model/field permissions, Admin object hooks and the project policy also apply. FK/M2M and computed columns are not editable in this alpha.
 
-Поле должно входить в `sheet_editable`. Также действуют `readonly_fields`, стандартные права модели, права поля, объектные методы Admin и политика проекта. FK/M2M и виртуальные колонки в альфе не редактируются.
+## Save conflict
 
-## Ошибка конфликта при сохранении
+A source/dependency changed or the snapshot expired. Preserve any needed edits separately, reload current data and reapply them. Do not replace `version` in a request. If only the response was lost, retry the exact body with its original idempotency key.
 
-Исходная запись или зависимость формулы изменилась, либо истёк снимок. Сохраните текст нужных правок отдельно, загрузите актуальную страницу и примените изменения заново. Не подменяйте `version` в запросе.
-
-Если потерян только ответ уже отправленного запроса, клиент API должен повторить **тот же запрос с исходным ключом идемпотентности**. Новый ключ может создать новую операцию.
-
-## SQLite: ошибка режима транзакций
+## SQLite transaction mode
 
 ```python
 DATABASES["default"].setdefault("OPTIONS", {})["transaction_mode"] = "IMMEDIATE"
 ```
 
-Одного `select_for_update()` для SQLite недостаточно. При временной занятости БД API возвращает повторяемую ошибку; повторите исходный запрос с тем же ключом.
+`select_for_update()` alone is insufficient on SQLite. A busy database returns a retryable error; retry the original request/key.
 
-## Ошибки `#REF!` и `#LIMIT!`
+## Formula errors
 
-`#REF!` означает недоступную ссылку: проверьте порядок колонок и границы загруженного снимка. Номер строки относится к текущей странице.
+`#REF!`: check visible column order and loaded snapshot boundaries. Row addresses are page-local. `#LIMIT!`: simplify the expression/range. Raising `MODELSHEET["formula"]` limits must account for project load.
 
-`#LIMIT!` означает превышение бюджета формулы. Упростите выражение или диапазон. Увеличение лимитов в `MODELSHEET["formula"]` должно учитывать нагрузку вашего проекта.
+## Large operation rejected
 
-## Большая операция отклоняется
+Above `bulk_background_threshold`, configure a [BackgroundAdapter](../background.md). Raising the threshold does not create a worker or queue. Check `max_bulk_rows` and bulk permissions as well.
 
-После `bulk_background_threshold` нужен настроенный [BackgroundAdapter](../background.md). Изменение порога не создаёт очередь или worker. Проверьте также `max_bulk_rows` и права на массовые изменения.
+## Cannot switch to ordinary Admin
 
-## Не получается вернуться в обычный Admin
+The current filter/order cannot be represented exactly. Simplify it. Custom list filters, related search and expression ordering may require separate integration.
 
-Текущие фильтры или сортировка не представимы точно в стандартном списке. Упростите состояние. Пользовательские list filters, related search и произвольные выражения порядка могут потребовать отдельной интеграции.
+## Production JavaScript does not load
 
-## На production не загружается JavaScript
+Run `collectstatic`, check serving of `STATIC_ROOT`, and look for missing `modelsheet` assets in browser network requests. Compiled assets are included in the wheel; npm is not required by consuming projects.
 
-Выполните `collectstatic`, проверьте обслуживание `STATIC_ROOT` и отсутствие 404 для `modelsheet` assets в сети браузера. Статика уже входит в wheel; npm-сборка в потребляющем проекте не требуется.
+## Report a bug
 
-## Сообщить об ошибке
-
-Создайте [GitHub Issue](https://github.com/svalench/django-modelsheet/issues) с версией пакета, Python/Django, типом БД, минимальной конфигурацией Admin и шагами воспроизведения. Удалите пароли, токены и пользовательские данные из примера.
+Open a [GitHub issue](https://github.com/svalench/django-modelsheet/issues) with package/Python/Django versions, database, minimal Admin configuration and reproduction steps. Remove secrets and personal data.

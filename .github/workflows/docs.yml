@@ -2,9 +2,9 @@ name: Documentation
 on:
   push:
     branches: [main]
-    paths: ['docs/**', 'mkdocs.yml', 'requirements-docs.txt', '.github/workflows/docs.yml']
+    paths: ['docs/**', 'mkdocs.yml', 'requirements-docs.txt', 'scripts/check_docs_locales.py', '.github/workflows/docs.yml']
   pull_request:
-    paths: ['docs/**', 'mkdocs.yml', 'requirements-docs.txt', '.github/workflows/docs.yml']
+    paths: ['docs/**', 'mkdocs.yml', 'requirements-docs.txt', 'scripts/check_docs_locales.py', '.github/workflows/docs.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,6 +22,7 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-docs.txt
       - run: pip install -r requirements-docs.txt
+      - run: python scripts/check_docs_locales.py
       - run: mkdocs build --strict
       - uses: actions/upload-pages-artifact@v4
         with:

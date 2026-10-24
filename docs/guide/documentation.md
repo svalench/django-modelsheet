@@ -1,32 +1,32 @@
-# Разработка документации
+# Contributing to the docs
 
-Этот сайт собирается из Markdown в репозитории с помощью Material for MkDocs и публикуется на GitHub Pages.
+This site uses Material for MkDocs and GitHub Pages. It has exactly three languages: English (default), Simplified Chinese and Belarusian.
 
-## Локальный просмотр
+## Preview and build
 
 ```bash
 python -m pip install -r requirements-docs.txt
 mkdocs serve
 ```
 
-Откройте `http://127.0.0.1:8000`. Навигация и настройки темы находятся в `mkdocs.yml`, страницы — в `docs/`, стили — в `docs/stylesheets/extra.css`.
-
-## Проверка сборки
+Open `http://127.0.0.1:8000`. Configuration is in `mkdocs.yml`; content is in `docs/`; styles are in `docs/stylesheets/extra.css`.
 
 ```bash
 mkdocs build --strict
 ```
 
-Готовый сайт появится в `site/`; эта папка не коммитится. Сборка проверяет ссылки и предупреждения. Перед публикацией проверьте изменённые страницы в светлой/тёмной теме и на узком экране.
+Build output goes into ignored `site/`. Check links, mobile layouts, both themes and all language switches before publishing.
 
-## Автоматическая публикация
+## Translation structure
 
-Workflow `.github/workflows/docs.yml` проверяет документацию в pull request. После изменений документации в `main` он собирает и публикует сайт через GitHub Actions. Можно также запустить его вручную.
+English uses `page.md`, Chinese `page.zh.md`, Belarusian `page.be.md`. Every page must have all three versions; the coverage check rejects missing translations before building. Use neutral links such as `guide/quickstart.md` so the i18n plugin retains the selected language. Do not translate API identifiers, paths or formula function names.
 
-Сборка документации не выпускает новую версию Python-пакета и не запускает публикацию в PyPI.
+The English site is at `/django-modelsheet/`, Chinese at `/django-modelsheet/zh/`, Belarusian at `/django-modelsheet/be/`. The language selector retains the current page. Navigation, theme controls and search UI are localized.
 
-## Как предложить улучшение
+## Publishing
 
-Кнопка редактирования на странице ведёт к исходному Markdown в GitHub. Сопровождайте примеры описанием ожидаемого результата, называйте версию, для которой проверено поведение, и не публикуйте в документации секреты проекта.
+`.github/workflows/docs.yml` checks pull requests and deploys documentation changes on `main`. Manual dispatch is also available. Documentation deployment does not publish a Python package to PyPI.
 
-Основные инструменты: [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/) и [GitHub Pages workflows](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages).
+Use each page's edit link to propose changes. Explain expected results and tested versions, and never include project secrets.
+
+Tools: [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/), [MkDocs Static i18n](https://ultrabug.github.io/mkdocs-static-i18n/), [GitHub Pages workflows](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages).

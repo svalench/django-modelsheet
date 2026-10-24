@@ -1,32 +1,30 @@
-# Права и целостность
+# Permissions and integrity
 
-Пакет использует стандартные права Django, методы Admin и дополнительные разрешения полей. Прямой запрос к JSON API проходит те же проверки, что и интерфейс.
+Django permissions, Admin hooks and field permissions apply to both UI and direct JSON requests.
 
-## Кто может открыть таблицу
+## Access requirements
 
-Требуются активный staff-пользователь, `modelsheet.open`, стандартное право просмотра модели и положительный результат `ModelAdmin.has_view_permission()`.
+Opening a sheet requires an active staff user, `modelsheet.open`, standard model `view` permission and `ModelAdmin.has_view_permission()`. Editing also requires `change`, `has_change_permission()` and the field's edit permission. Superusers can use explicitly enabled/registered models immediately.
 
-Для изменения дополнительно нужны стандартное право `change`, `has_change_permission()` и разрешение конкретного поля. Суперпользователь может работать с явно разрешёнными и зарегистрированными моделями без назначения групп.
-
-## Группы для быстрого старта
+## Optional role groups
 
 ```bash
 python manage.py modelsheet_roles
 ```
 
-Команда идемпотентно создаёт группы, но никому их не назначает. Выберите группу пользователя через Admin; учётная запись также должна иметь `is_staff=True`.
+The idempotent command creates groups but assigns no users. Assign groups in Admin and set the account's `is_staff` flag.
 
-| Группа | Назначение |
+| Group | Capabilities |
 | --- | --- |
-| ModelSheet Viewer | Просмотр таблиц |
-| ModelSheet Editor | Просмотр и редактирование |
-| ModelSheet Operator | Редактирование, массовые операции и история |
-| ModelSheet Auditor | Просмотр и история |
-| ModelSheet Admin | Доступные возможности пакета; без статуса superuser |
+| ModelSheet Viewer | Read sheets |
+| ModelSheet Editor | Read and edit |
+| ModelSheet Operator | Edit, bulk operations and history |
+| ModelSheet Auditor | Read and history |
+| ModelSheet Admin | Package capabilities; no superuser status |
 
-Группы получают права на настроенные поля. Перед назначением проверьте чувствительные колонки. Повторный запуск добавляет разрешения и не удаляет пользовательские назначения.
+Templates grant configured fields. Review sensitive columns before assigning users. Re-running adds grants without removing project-specific permissions.
 
-## Разрешения полей
+## Field and row scope
 
 ```text
 modelsheet.view_field_shop_product_price
@@ -35,15 +33,11 @@ modelsheet.bulk_shop_product
 modelsheet.history_shop_product
 ```
 
-Идентификаторы содержат приложение, модель и поле. Право на поле не предоставляет право изменения модели.
+Field permissions never grant model-level editing. Hidden fields cannot be used for search, filters, order, formulas or history. A custom `PermissionPolicy` further restricts access.
 
-Скрытые поля нельзя использовать для поиска, фильтрации, сортировки, формул и чтения истории. Пользовательская `PermissionPolicy` дополнительно сужает доступ.
+Use `get_queryset()` for row/tenant scope so counts and pagination are restricted too:
 
-## Ограничение строк
-
-Для tenant- и row-scope используйте `ModelAdmin.get_queryset()`: так ограничение действует и на подсчёт, и на страницы, и на запись.
-
-```python title="Пример для проекта с полем owner"
+```python title="Example model with owner, title and status fields"
 class DocumentAdmin(ModelSheetAdmin):
     sheet_fields = ("title", "status")
     sheet_editable = ("status",)
@@ -55,22 +49,14 @@ class DocumentAdmin(ModelSheetAdmin):
         return queryset.filter(owner=request.user)
 ```
 
-Это пример для собственной модели, содержащей `owner`, `title` и `status`. В демомодели товара поля `owner` нет.
+The demo Product does not have `owner`; adapt this to your own model.
 
-## Конкурентные изменения { #concurrency }
+## Concurrent changes { #concurrency }
 
-При загрузке сервер выдаёт подписанный отпечаток конкретных полей записи. Перед сохранением повторно читает и блокирует строку внутри транзакции, затем сверяет состояние.
+Loaded rows carry a signed fingerprint of concrete field values. The server rereads/locks rows and compares fingerprints inside the write transaction. Formulas also check source dependencies. Changes through another Admin form or API cause a conflict rather than silent overwrite.
 
-Если другой пользователь уже изменил запись через Admin, API или иной код, сохранение отклоняется как конфликт. Для формул проверяются также исходные строки-зависимости.
+PostgreSQL/MySQL use row locks. SQLite requires `transaction_mode="IMMEDIATE"` and short transactions. Ordinary saves are atomic; background jobs can partially finish. Fingerprints do not track every intermediate state or arbitrary related-table changes.
 
-- PostgreSQL и MySQL используют блокировку строк.
-- SQLite требует `transaction_mode="IMMEDIATE"` и коротких транзакций.
-- Обычное сохранение атомарно; фоновые операции могут завершиться частично.
+## Save hooks
 
-Отпечаток не заменяет историю всех промежуточных состояний и не охватывает произвольные изменения связанных таблиц.
-
-## Бизнес-логика сохранения
-
-Стандартный адаптер вызывает `full_clean()` и `instance.save()`, включая сигналы модели. Методы `ModelAdmin.save_model()`, `save_related()` и кастомные Admin-формы автоматически не воспроизводятся. Перенесите нужную логику в [SaveAdapter](../extensions.md).
-
-Внешним эффектам сигналов нужна собственная идемпотентность. Изменения модели и журнала пакета должны оставаться в одной БД `default`.
+The default adapter calls `full_clean()` and `instance.save()`, including model signals. Custom Admin forms, `save_model()` and `save_related()` require a [SaveAdapter](../extensions.md). External effects need their own idempotency. Model changes and the journal must share the `default` database.

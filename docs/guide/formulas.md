@@ -1,86 +1,69 @@
-# Формулы на примерах
+# Formula recipes
 
-Формула начинается с `=`. Результат виден в таблице, а перед сохранением сервер рассчитывает его повторно и валидирует значение поля.
+Start with `=`. The client previews the result; the server recalculates and validates it before writing.
 
-!!! info "Однократный расчёт"
-    В поле модели записывается результат формулы. Постоянная зависимость между полями не создаётся. Для колонки, которая вычисляется при отображении, используйте `sheet_computed_fields`.
+!!! info "One-time assignments"
+    A model field stores the calculated value, not a persistent dependency. Use `sheet_computed_fields` for display-only calculated columns.
 
-## Готовые рецепты
+## Recipes
 
-| Задача | Формула |
+| Goal | Formula |
 | --- | --- |
-| Повысить цену на 7% | `=ROUND([price]*1.07,2)` |
-| Скидка 10% | `=ROUND([price]*0.9,2)` |
-| Стоимость запасов | `=[price]*[stock]` |
-| Статус по остатку | `=IF([stock]>0,"ready","order")` |
-| Заменить NULL | `=IFNULL([note],"Без примечания")` |
-| Название в верхнем регистре | `=UPPER([name])` |
-| Год из даты | `=YEAR([available_on])` |
-| Сумма загруженных цен | `=SUM(price)` |
-| Перехват ошибки деления | `=IFERROR([price]/[stock],0)` |
+| Raise prices by 7% | `=ROUND([price]*1.07,2)` |
+| Apply a 10% discount | `=ROUND([price]*0.9,2)` |
+| Inventory value | `=[price]*[stock]` |
+| Status from stock | `=IF([stock]>0,"ready","order")` |
+| Replace NULL | `=IFNULL([note],"No note")` |
+| Uppercase name | `=UPPER([name])` |
+| Year from date | `=YEAR([available_on])` |
+| Loaded prices total | `=SUM(price)` |
+| Handle division errors | `=IFERROR([price]/[stock],0)` |
 
-Имена полей в примерах должны присутствовать в вашей модели и быть доступны пользователю. Значения статусов должны соответствовать `choices` поля.
+Fields must exist and be visible to the user. Status strings must match the field's choices.
 
-## Исходное значение строки
+## Original row values
 
-`[price]` читает цену из исходного состояния строки. Поэтому выражение `=[price]*1.07`, записанное в саму цену, не создаёт цикл.
+`[price]` reads the original row value, so assigning `=[price]*1.07` to price does not form a cycle. `1200.00` becomes `1284.00`. All bulk assignments also use original data, regardless of assignment order.
 
-Для исходной цены `1200.00` результат будет `1284.00`. Несколько присваиваний массовой операции также читают исходные данные, независимо от порядка присваиваний.
+## Cell references { #cell-references }
 
-## Ссылки на ячейки { #cell-references }
-
-| Ссылка | Значение |
+| Reference | Meaning |
 | --- | --- |
-| `B7` | 7-я загруженная строка, 2-я отображаемая колонка данных |
-| `$B$7` | Фиксированные строка и колонка при копировании |
-| `B$7` | Фиксированная строка |
-| `$B7` | Фиксированная колонка |
-| `B1:B20` | Диапазон текущего снимка |
+| `B7` | Seventh loaded row, second displayed data column |
+| `$B$7` | Fixed row and column when copying |
+| `B$7` / `$B7` | Fixed row / fixed column |
+| `B1:B20` | Current snapshot range |
 
-```text
-=SUM(B1:B20)
-=B7*$C$1
+Positional references see pending edits. Out-of-snapshot references yield `#REF!`; cycles yield `#CYCLE!`. On later pages, `B7` still means that page's seventh row.
+
+## Computed columns
+
+```python
+sheet_computed_fields = {
+    "inventory_value": "=[price]*[stock]",
+    "availability": '=IF([stock]>0,"In stock","On order")',
+}
 ```
 
-Позиционные ссылки учитывают другие локальные изменения. Ссылки за пределы загруженной страницы дают `#REF!`, циклические зависимости — `#CYCLE!`. Даже на следующей странице `B7` означает седьмую строку этой страницы.
+Columns are read-only and cannot be used for server sorting or filtering in this version.
 
-## Виртуальная колонка
+## Aggregates and precision
 
-```python title="shop/admin.py"
-class ProductAdmin(ModelSheetAdmin):
-    sheet_fields = ("name", "price", "stock")
-    sheet_editable = ("price", "stock")
-    sheet_computed_fields = {
-        "inventory_value": "=[price]*[stock]",
-        "availability": '=IF([stock]>0,"В наличии","Под заказ")',
-    }
-```
+`SUM`, `AVG`, `COUNT` cover the loaded range, not every database row. `COUNT` counts numeric values. NULL, empty values and nonnumeric text are skipped.
 
-Такие колонки доступны только для чтения. Серверные сортировка и фильтрация по ним в этой версии не поддерживаются.
+Bulk formulas allow named references only. `QSUM`, `QAVG`, `QCOUNT` cover the immutable preview set, for example `=[price]/QSUM([price])`.
 
-## Агрегаты страницы и операции
+Decimal uses 28 significant digits and `ROUND_HALF_EVEN`; model fields round to their `decimal_places`. `ROUND(8.5,0)` is `8`, `ROUND(9.5,0)` is `10`.
 
-`SUM`, `AVG`, `COUNT` работают с загруженным диапазоном. Они не запрашивают все записи модели. `COUNT` считает числовые значения; `NULL`, пустые значения и нечисловой текст пропускаются.
-
-В массовых формулах используйте именованные ссылки. `QSUM`, `QAVG`, `QCOUNT` рассчитываются по полному зафиксированному набору предпросмотра:
-
-```text title="Доля цены в сумме выбранных товаров"
-=[price]/QSUM([price])
-```
-
-## Точность и ошибки
-
-Decimal-арифметика использует 28 значащих цифр и `ROUND_HALF_EVEN`. Поле `DecimalField` дополнительно округляет результат до своих `decimal_places`. Например, `ROUND(8.5,0)` даёт `8`, а `ROUND(9.5,0)` — `10`.
-
-| Ошибка | Причина |
+| Error | Meaning |
 | --- | --- |
-| `#REF!` | Ссылка недоступна или вне снимка |
-| `#CYCLE!` | Цикл зависимостей |
-| `#DIV/0!` | Деление на ноль |
-| `#VALUE!` | Несовместимые типы |
-| `#NAME?` | Неизвестная функция или имя |
-| `#N/A` | Нет значения для расчёта |
-| `#NUM!` | Недопустимый числовой результат |
-| `#LIMIT!` | Превышен бюджет вычисления |
+| `#REF!` | Unavailable/out-of-snapshot reference |
+| `#CYCLE!` | Dependency cycle |
+| `#DIV/0!` | Division by zero |
+| `#VALUE!` | Incompatible types |
+| `#NAME?` | Unknown function/name |
+| `#N/A` | Missing calculation input |
+| `#NUM!` | Invalid numeric result |
+| `#LIMIT!` | Computation budget exceeded |
 
-Полный список операторов, функций и ограничений: [спецификация языка](../formulas.md).
+See the full [formula specification](../formulas.md).

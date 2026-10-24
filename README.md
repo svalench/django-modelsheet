@@ -7,7 +7,7 @@ local undo/redo, Decimal formulas, server-side filters, and previewed bulk chang
 The repository includes a working demo, compiled assets, tests, and a compatibility CI matrix.
 
 **[Documentation website →](https://svalench.github.io/django-modelsheet/)** —
-installation, examples, formulas, bulk operations and extension APIs (Russian).
+installation, examples, formulas, bulk operations and extension APIs in English, Simplified Chinese and Belarusian.
 
 ## Quickstart
 

@@ -1,8 +1,6 @@
-# Настройки
+# Configuration
 
-Все настройки находятся в `settings.MODELSHEET`. Указанные значения объединяются с настройками по умолчанию; секция `formula` также объединяется по ключам.
-
-## Пример конфигурации
+`settings.MODELSHEET` merges with defaults, including nested keys in `formula`.
 
 ```python title="settings.py"
 MODELSHEET = {
@@ -20,50 +18,40 @@ MODELSHEET = {
     "max_operations_per_minute": 30,
     "max_request_bytes": 1000000,
     "formula": {
-        "max_length": 500,
-        "max_depth": 10,
-        "max_steps": 10000,
-        "timeout_ms": 250,
+        "max_length": 500, "max_depth": 10,
+        "max_steps": 10000, "timeout_ms": 250,
     },
 }
 ```
 
-## Страницы и сохранение
+## Pages and saves
 
-| Настройка | По умолчанию | Назначение |
+| Setting | Default | Purpose |
 | --- | --- | --- |
-| `models` | `[]` | Явный список разрешённых моделей `app.Model` |
-| `page_size` | `200` | Строк на странице |
-| `max_page_size` | `500` | Верхняя граница размера страницы |
-| `max_save_rows` | `500` | Строк в обычном сохранении |
-| `count_mode` | `"exact"` | `exact` или `none`; во втором случае COUNT не запрашивается |
-| `max_request_bytes` | `1000000` | Лимит размера запроса |
-| `snapshot_ttl_seconds` | `1800` | Время жизни снимка представления |
+| `models` | `[]` | Explicit `app.Model` allowlist |
+| `page_size` / `max_page_size` | `200` / `500` | Default/maximum page rows |
+| `max_save_rows` | `500` | Maximum rows per ordinary save |
+| `count_mode` | `"exact"` | `exact` or `none`; none omits COUNT |
+| `max_request_bytes` | `1000000` | Request size cap |
+| `snapshot_ttl_seconds` | `1800` | Snapshot lifetime |
 
-Пагинация использует offset/limit. Курсорной пагинации и приблизительного COUNT в альфе нет.
+Pagination is offset/limit. Cursor pagination and approximate counts are not included.
 
-## Массовые операции и история
+## Operations and history
 
-| Настройка | По умолчанию | Назначение |
+| Setting | Default | Purpose |
 | --- | --- | --- |
-| `bulk_background_threshold` | `5000` | Порог обязательной фоновой обработки |
-| `max_bulk_rows` | `100000` | Максимум кандидатов операции |
-| `chunk_size` | `200` | Размер порции фонового выполнения |
-| `preview_ttl_seconds` | `1800` | Время жизни предпросмотра |
-| `history_retention_days` | `365` | Срок хранения истории |
-| `max_operations_per_minute` | `30` | Ограничение частоты операций |
-| `max_filter_depth` | `10` | Глубина дерева условий |
-| `max_filter_nodes` | `100` | Количество узлов условий |
+| `bulk_background_threshold` | `5000` | Background processing threshold |
+| `max_bulk_rows` | `100000` | Maximum operation candidates |
+| `chunk_size` | `200` | Background chunk rows |
+| `preview_ttl_seconds` | `1800` | Preview lifetime |
+| `history_retention_days` | `365` | History retention |
+| `max_operations_per_minute` | `30` | Operation rate cap |
+| `max_filter_depth` / `max_filter_nodes` | `10` / `100` | Filter complexity caps |
 
-Настройте периодический запуск через свой планировщик:
+Schedule `python manage.py modelsheet_cleanup` with your scheduler. It removes expired snapshots and old terminal/unused-preview operations according to retention. Purged idempotency keys no longer protect against reapplication.
 
-```bash
-python manage.py modelsheet_cleanup
-```
-
-Команда удаляет просроченные снимки и старые завершённые операции или неиспользованные предпросмотры согласно сроку хранения. После удаления операции её ключ идемпотентности больше не защищает от повторного применения.
-
-## Точки расширения
+## Extensions
 
 ```python
 MODELSHEET.update({
@@ -74,4 +62,4 @@ MODELSHEET.update({
 })
 ```
 
-Классы создаются без аргументов. [API расширений](../extensions.md) описывает сигнатуры, [фоновые задания](../background.md) — восстановление контекста и повторную доставку.
+Components are instantiated without arguments. See [adapters](../extensions.md) and [background jobs](../background.md).

@@ -1,28 +1,26 @@
-# Демопроект
+# Demo project
 
-В репозитории есть Django-проект с товарами, категориями и заказами. Команда наполнения создаёт 500 товаров, чтобы попробовать страницы, фильтры и массовые изменения.
+The repository includes products, categories and orders. The seed command creates 500 products for trying pagination, filters and bulk operations.
 
-## Запуск из репозитория
+## Run locally
 
 ```bash
-git clone https://github.com/svalench/django-modelsheet.git
-cd django-modelsheet
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -e '.[test]'
-python manage.py migrate
-python manage.py seed_demo --create-user
-python manage.py runserver
+ git clone https://github.com/svalench/django-modelsheet.git
+ cd django-modelsheet
+ python -m venv .venv
+ source .venv/bin/activate
+ python -m pip install -e '.[test]'
+ python manage.py migrate
+ python manage.py seed_demo --create-user
+ python manage.py runserver
 ```
 
-В Windows окружение активируется командой `.venv\Scripts\activate`.
+On Windows, activate with `.venv\Scripts\activate`. Open `http://127.0.0.1:8000/admin/shop/product/sheet/`.
 
-Откройте `http://127.0.0.1:8000/admin/shop/product/sheet/`.
+!!! warning "Local credentials only"
+    `--create-user` creates `admin` / `admin`. The demo settings and credentials are for local development.
 
-!!! warning "Учётная запись только для локального знакомства"
-    Флаг `--create-user` создаёт пользователя `admin` с паролем `admin`. Демонастройки и эта учётная запись предназначены для локальной разработки.
-
-Для запуска демо готовой статики достаточно. Если меняете frontend:
+Compiled assets are included. Rebuild only when modifying the frontend:
 
 ```bash
 cd frontend
@@ -30,26 +28,16 @@ npm ci
 npm run build
 ```
 
-## Попробуйте три сценария
+## Try three scenarios
 
-### Изменение цены с проверкой модели
+### Model validation
 
-1. Откройте товар и запомните его себестоимость `cost_price`.
-2. В таблице задайте цену ниже себестоимости.
-3. Нажмите **Save** — модель вернёт ошибку, а правки останутся в буфере.
-4. Исправьте цену и сохраните повторно.
+Set a product's price below its `cost_price` and press **Save**. Validation fails and the buffer stays intact. Correct the price and save again.
 
-### Формула для диапазона
+### Range formulas
 
-1. Впишите в цену первой строки `=ROUND([price]*1.07,2)`.
-2. Выделите несколько ячеек цены и заполните вниз через Ctrl/Cmd+D.
-3. Проверьте результаты и сохраните изменения.
+Enter `=ROUND([price]*1.07,2)` in the first price cell, select a vertical range, fill down with Ctrl/Cmd+D, inspect the results and save.
 
-### Конфликт с обычным Admin
+### Conflict with ordinary Admin
 
-1. Загрузите строку в таблице.
-2. В другой вкладке измените тот же товар через стандартную форму Admin.
-3. Попробуйте сохранить локальные правки таблицы.
-4. Пакет обнаружит изменение исходного состояния и отклонит запись. Перезагрузите актуальные данные и примените правки заново.
-
-Подробнее: [как устроены конфликты](permissions.md#concurrency).
+Load a row in the sheet, edit the same product in a standard Admin form in another tab, then save the pending sheet edits. The changed source state causes a conflict instead of a silent overwrite. Reload current data and reapply your changes. See [concurrency](permissions.md#concurrency).

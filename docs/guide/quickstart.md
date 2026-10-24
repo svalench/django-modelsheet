@@ -1,50 +1,42 @@
-# Установка за 5 минут
+# Installation in 5 minutes
 
-Подключим таблицу товаров: цену и остаток можно будет редактировать, название — только читать, а стоимость запасов — вычислять формулой.
+Connect an existing `shop.Product` model: edit price and stock, keep the name read-only, and compute inventory value.
 
-!!! info "Текущая версия — alpha"
-    Пример рассчитан на проект с настроенным Django Admin и уже существующей моделью `shop.Product`. Для знакомства без своего проекта используйте [демопроект](demo.md).
-
-## 1. Установите пакет
+## 1. Install the alpha
 
 ```bash
 python -m pip install django-modelsheet==0.3.0a1
 ```
 
-Готовые JavaScript и CSS входят в пакет. Node.js, npm и CDN для подключения не нужны.
+The package includes compiled JavaScript/CSS. Installing it requires no Node.js, npm or CDN. To try without an existing project, use the [demo](demo.md).
 
-## 2. Разрешите модель
+## 2. Enable the model
 
 ```python title="settings.py"
 INSTALLED_APPS += ["modelsheet"]
-
-MODELSHEET = {
-    "models": ["shop.Product"],
-    "page_size": 200,
-}
+MODELSHEET = {"models": ["shop.Product"], "page_size": 200}
 ```
 
-Модель должна быть одновременно в `MODELSHEET["models"]` и зарегистрирована через `ModelSheetAdmin`. Одного наследования недостаточно.
+Both the allowlist and `ModelSheetAdmin` registration are required.
 
 === "SQLite"
 
-    Добавьте режим транзакций, необходимый для защиты от конкурентной записи:
+    Safe writes require IMMEDIATE transactions:
 
-    ```python title="settings.py"
+    ```python
     DATABASES["default"].setdefault("OPTIONS", {})
     DATABASES["default"]["OPTIONS"]["transaction_mode"] = "IMMEDIATE"
     ```
 
 === "PostgreSQL / MySQL"
 
-    Используется стандартное соединение `default` и блокировка строк внутри транзакции. Для MySQL нужны транзакционные таблицы InnoDB. Отдельные настройки подключения для пакета не требуются.
+    The package uses the `default` connection and row locks inside transactions. MySQL tables must use InnoDB.
 
-## 3. Подключите Admin
+## 3. Register the Admin
 
 ```python title="shop/admin.py"
 from django.contrib import admin
 from modelsheet.admin import ModelSheetAdmin
-
 from .models import Product
 
 
@@ -59,16 +51,16 @@ class ProductAdmin(ModelSheetAdmin):
     }
 ```
 
-Если модель уже зарегистрирована, замените базовый `admin.ModelAdmin` в существующем классе. Не регистрируйте модель повторно.
+If already registered, change the base class of the existing Admin; do not register the model twice.
 
-| Атрибут | Назначение |
+| Attribute | Purpose |
 | --- | --- |
-| `sheet_fields` | Доступные в таблице поля модели |
-| `sheet_editable` | Подмножество полей для изменения |
-| `sheet_computed_fields` | Виртуальные колонки: имя → формула |
-| `search_fields` | Поля поиска; используйте доступные скалярные поля |
+| `sheet_fields` | Available model fields |
+| `sheet_editable` | Editable subset |
+| `sheet_computed_fields` | Read-only virtual columns: name → formula |
+| `search_fields` | Searchable visible scalar fields |
 
-## 4. Примените миграции
+## 4. Apply migrations
 
 ```bash
 python manage.py migrate
@@ -76,21 +68,10 @@ python manage.py collectstatic --noinput
 python manage.py check
 ```
 
-Миграции создают снимки представлений и журнал операций. Добавлять поля или базовый класс в `Product` не нужно.
+Migrations create view snapshots and the operation journal. Your model needs no additional fields or base class.
 
-## 5. Откройте таблицу
+## 5. Open the sheet
 
-Войдите в Admin как суперпользователь и нажмите **Spreadsheet** в списке товаров или откройте:
+Sign in as a superuser and choose **Spreadsheet** in the model list, or visit `/admin/shop/product/sheet/`. Edit a price, press **Save**, then reload to verify it persisted. For staff accounts, configure [permissions](permissions.md).
 
-```text
-/admin/shop/product/sheet/
-```
-
-Измените цену, нажмите **Save** и перезагрузите страницу: новое значение должно сохраниться. Для обычных сотрудников настройте [права доступа](permissions.md).
-
-## Куда дальше
-
-- [Работа с таблицей](editing.md): диапазоны, вставка, отмена и сохранение.
-- [Формулы](formulas.md): наценка, скидка и вычисляемые колонки.
-- [Массовые изменения](bulk.md): обновление всех подходящих товаров с предпросмотром.
-- [Настройки](configuration.md): лимиты, история и адаптеры.
+Next: [editing](editing.md), [formula recipes](formulas.md), [bulk operations](bulk.md), [configuration](configuration.md).
