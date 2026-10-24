@@ -1,0 +1,36 @@
+{
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "python": "3.13.7",
+  "django": "6.0.4",
+  "database": "SQLite (temporary file)",
+  "rows": 100000,
+  "columns": 50,
+  "repeats": 10,
+  "seed_seconds": 25.64,
+  "results": {
+    "first_page_200x50": {
+      "median_ms": 29.94,
+      "p95_ms": 40.7,
+      "sql_queries": 4,
+      "returned_rows": 200
+    },
+    "page_5_200x50": {
+      "median_ms": 33.75,
+      "p95_ms": 40.94,
+      "sql_queries": 4,
+      "returned_rows": 200
+    },
+    "indexed_exact_filter": {
+      "median_ms": 2.99,
+      "p95_ms": 4.8,
+      "sql_queries": 4,
+      "returned_rows": 1
+    },
+    "substring_search": {
+      "median_ms": 46.6,
+      "p95_ms": 57.19,
+      "sql_queries": 4,
+      "returned_rows": 1
+    }
+  }
+}

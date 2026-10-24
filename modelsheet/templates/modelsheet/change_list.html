@@ -1,0 +1,6 @@
+{% extends "admin/change_list.html" %}
+{% load i18n %}
+{% block object-tools-items %}
+  {% if modelsheet_url %}<li><a href="{{ modelsheet_url }}">{% translate "Spreadsheet" %}</a></li>{% endif %}
+  {{ block.super }}
+{% endblock %}

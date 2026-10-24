@@ -1,0 +1,14 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p>{{ report.status }} · {{ report.changed }} / {{ report.total }} · {{ report.created_at }}</p>
+<table>
+  <thead><tr><th>PK</th><th>Status</th><th>Before</th><th>After</th><th>Error</th></tr></thead>
+  <tbody>{% for item in report.items %}
+  <tr><td>{{ item.pk }}</td><td>{{ item.status }}</td>
+    <td>{% for field,value in item.before.items %}<div>{{ field }}: {{ value }}</div>{% endfor %}</td>
+    <td>{% for field,value in item.after.items %}<div>{{ field }}: {{ value }}</div>{% endfor %}</td>
+    <td>{{ item.error.code }}</td></tr>
+  {% endfor %}</tbody>
+</table>
+{% if report.has_next %}<p>More entries are available through the paginated operation API.</p>{% endif %}
+{% endblock %}

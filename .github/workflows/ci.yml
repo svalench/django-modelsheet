@@ -1,0 +1,76 @@
+name: CI
+on: [push, pull_request]
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {python: '3.11', django: '5.2', db: sqlite}
+          - {python: '3.12', django: '5.2', db: sqlite}
+          - {python: '3.13', django: '5.2', db: sqlite}
+          - {python: '3.14', django: '5.2', db: sqlite}
+          - {python: '3.12', django: '6.0', db: sqlite}
+          - {python: '3.13', django: '6.0', db: sqlite}
+          - {python: '3.14', django: '6.0', db: sqlite}
+          - {python: '3.12', django: '6.1', db: sqlite}
+          - {python: '3.13', django: '6.1', db: sqlite}
+          - {python: '3.14', django: '6.1', db: sqlite}
+          - {python: '3.13', django: '5.2', db: postgres}
+          - {python: '3.13', django: '6.0', db: postgres}
+          - {python: '3.13', django: '6.1', db: postgres}
+          - {python: '3.13', django: '5.2', db: mysql}
+          - {python: '3.13', django: '6.0', db: mysql}
+          - {python: '3.13', django: '6.1', db: mysql}
+    services:
+      postgres:
+        image: postgres:16
+        env: {POSTGRES_DB: modelsheet, POSTGRES_USER: modelsheet, POSTGRES_PASSWORD: modelsheet}
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U modelsheet"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+      mysql:
+        image: mysql:8.4
+        env: {MYSQL_DATABASE: modelsheet, MYSQL_ROOT_PASSWORD: modelsheet}
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost -pmodelsheet"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      MODELSHEET_DB: '${{ matrix.db }}'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '${{ matrix.python }}'}
+      - run: pip install -e '.[test,postgres,mysql]' 'Django~=${{ matrix.django }}.0'
+      - run: python manage.py check && python manage.py makemigrations --check --dry-run
+      - run: python -m ruff check .
+      - run: python -m pytest -q
+
+  browser-and-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.13'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22', cache: npm, cache-dependency-path: frontend/package-lock.json}
+      - run: pip install -e '.[test]' twine
+      - run: npm ci && npm test && npm run build
+        working-directory: frontend
+      - run: git diff --exit-code -- modelsheet/static
+      - run: npx playwright install --with-deps chromium && npm run test:e2e
+        working-directory: frontend
+      - run: python -m build && python -m twine check dist/*
+      - run: python scripts/package_smoke.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-reports-and-distributions
+          path: |
+            frontend/test-results
+            frontend/playwright-report
+            dist

@@ -1,0 +1,11 @@
+{% extends "admin/base_site.html" %}
+{% load static i18n %}
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'modelsheet/sheet.css' %}">{% endblock %}
+{% block content %}
+  {% csrf_token %}
+  {{ initial_state|json_script:"modelsheet-state" }}
+  {{ modelsheet_config|json_script:"modelsheet-config" }}
+  <div id="modelsheet-app" aria-label="{% translate 'Spreadsheet' %}"></div>
+  <script src="jsi18n/"></script>
+  <script type="module" src="{% static 'modelsheet/sheet.js' %}"></script>
+{% endblock %}

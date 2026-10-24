@@ -1,0 +1,13 @@
+include LICENSE README.md CHANGELOG.md CONTRIBUTING.md SECURITY.md
+recursive-include modelsheet/static *
+recursive-include modelsheet/templates *.html
+recursive-include modelsheet/locale *.po *.mo
+recursive-include docs *.md *.json
+recursive-include frontend *.ts *.json *.html *.css
+prune frontend/node_modules
+prune frontend/test-results
+prune frontend/playwright-report
+recursive-include tests *.py *.json
+recursive-include demo *.py
+recursive-include scripts *.py
+include manage.py

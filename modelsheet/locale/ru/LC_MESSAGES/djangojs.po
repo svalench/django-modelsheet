@@ -1,0 +1,188 @@
+#
+msgid ""
+msgstr ""
+"Language: ru\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Save"
+msgstr "Сохранить"
+
+msgid "Undo"
+msgstr "Отменить"
+
+msgid "Redo"
+msgstr "Повторить"
+
+msgid "Fill down"
+msgstr "Заполнить вниз"
+
+msgid "Filters"
+msgstr "Фильтры"
+
+msgid "Columns"
+msgstr "Колонки"
+
+msgid "Bulk change"
+msgstr "Массовое изменение"
+
+msgid "History"
+msgstr "История"
+
+msgid "Ordinary Admin"
+msgstr "Обычный список"
+
+msgid "Search"
+msgstr "Поиск"
+
+msgid "Previous"
+msgstr "Назад"
+
+msgid "Next"
+msgstr "Далее"
+
+msgid "Ready"
+msgstr "Готово"
+
+msgid "Saving"
+msgstr "Сохранение"
+
+msgid "Saved"
+msgstr "Сохранено"
+
+msgid "Close"
+msgstr "Закрыть"
+
+msgid "Apply"
+msgstr "Применить"
+
+msgid "Cancel"
+msgstr "Отмена"
+
+msgid "Resume"
+msgstr "Продолжить"
+
+msgid "Preview"
+msgstr "Предпросмотр"
+
+msgid "Confirm"
+msgstr "Подтвердить"
+
+msgid "Add condition"
+msgstr "Добавить условие"
+
+msgid "Add group"
+msgstr "Добавить группу"
+
+msgid "Remove"
+msgstr "Удалить"
+
+msgid "Add assignment"
+msgstr "Добавить присваивание"
+
+msgid "All filtered rows"
+msgstr "Все найденные записи"
+
+msgid "Selected rows on this page"
+msgstr "Выделенные строки на странице"
+
+msgid "Save changes before continuing? Cancel discards changes."
+msgstr "Сохранить изменения? «Отмена» — отбросить изменения."
+
+msgid "No rows selected"
+msgstr "Строки не выделены"
+
+msgid "Unsaved changes"
+msgstr "Есть несохранённые изменения"
+
+msgid "Readonly cells skipped"
+msgstr "Ячейки только для чтения пропущены"
+
+msgid "Frozen columns"
+msgstr "Закреплённые колонки"
+
+msgid "Value or formula"
+msgstr "Значение или формула"
+
+msgid "Loading"
+msgstr "Загрузка"
+
+msgid "No matching records"
+msgstr "Записи не найдены"
+
+msgid "Changed rows"
+msgstr "Изменено строк"
+
+msgid "Keep editing"
+msgstr "Продолжить редактирование"
+
+msgid "Discard"
+msgstr "Отбросить"
+
+msgid "Unsaved edits"
+msgstr "Несохранённые изменения"
+
+msgid "Select all matching results in Bulk change"
+msgstr "Выбор всех результатов — в массовом изменении"
+
+msgid "Sort"
+msgstr "Сортировка"
+
+msgid "Ascending"
+msgstr "По возрастанию"
+
+msgid "Descending"
+msgstr "По убыванию"
+
+msgid "Add sort"
+msgstr "Добавить сортировку"
+
+msgid "Details"
+msgstr "Подробности"
+
+msgid "Matched"
+msgstr "Найдено"
+
+msgid "Errors"
+msgstr "Ошибки"
+
+msgid "Status"
+msgstr "Статус"
+
+msgid "Before"
+msgstr "До"
+
+msgid "After"
+msgstr "После"
+
+msgid "Error"
+msgstr "Ошибка"
+
+msgid "preview"
+msgstr "Предпросмотр готов"
+
+msgid "preparing"
+msgstr "Подготовка"
+
+msgid "queued"
+msgstr "В очереди"
+
+msgid "running"
+msgstr "Выполняется"
+
+msgid "done"
+msgstr "Завершено"
+
+msgid "partial"
+msgstr "Завершено с ошибками"
+
+msgid "failed"
+msgstr "Ошибка выполнения"
+
+msgid "cancelled"
+msgstr "Отменено"
+
+msgid "pending"
+msgstr "Ожидает"
+
+msgid "dispatch_failed"
+msgstr "Ошибка очереди"
