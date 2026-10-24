@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0a1 — unreleased
+## 0.3.0a1 — 2026-10-24
 
 - Initial Django package, explicit Admin registration, precompiled static assets.
 - Spreadsheet range editing, local undo/redo, safe atomic saves and row fingerprints.
