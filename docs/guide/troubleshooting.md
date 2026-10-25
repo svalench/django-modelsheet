@@ -2,11 +2,11 @@
 
 ## Spreadsheet button is missing
 
-Check that `modelsheet` is installed and migrated, `app.Model` is allowlisted, the registered Admin extends `ModelSheetAdmin`, and `sheet_fields` and user permissions are configured. Run `python manage.py check`.
+Check that `modelsheet` is installed and migrated, the registered Admin extends `ModelSheetAdmin`, and `sheet_fields` and user permissions are configured. Run `python manage.py check`.
 
 ## A field is read-only
 
-It must be in `sheet_editable`. `readonly_fields`, model/field permissions, Admin object hooks and the project policy also apply. FK/M2M and computed columns are not editable in this alpha.
+It must be in `sheet_editable`. `readonly_fields`, model/field permissions, Admin object hooks and the project policy also apply. FK/M2M and computed columns are not editable in 0.3.0.
 
 ## Save conflict
 

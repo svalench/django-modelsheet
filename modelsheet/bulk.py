@@ -14,6 +14,7 @@ from .conf import component, config
 from .adapters import serialize
 from .errors import SheetError
 from .formula import FormulaError, references
+from .formula.engine import QueryAggregates
 from .metadata import fields_for, require_fields
 from .models import Operation, OperationItem
 from .query import parse_state, queryset
@@ -45,6 +46,10 @@ def candidate_queryset(request, admin, fields, parameters):
 def preview(request, admin, payload):
     check_model(request, admin, change=True, action="bulk")
     fields = fields_for(request, admin)
+    key, request_hash = operation_key(payload), digest(payload)
+    op = existing_operation(request, admin, key, request_hash)
+    if op:
+        return report(request, admin, op, own=True)
     assignments = payload.get("assignments")
     if not isinstance(assignments, dict) or not assignments:
         raise SheetError("invalid_assignments", "At least one assignment is required.")
@@ -99,7 +104,6 @@ def preview(request, admin, payload):
             "Configure a background adapter or narrow the filter.",
             status=409,
         )
-    key, request_hash = operation_key(payload), digest(payload)
     try:
         with write_transaction():
             get_user_model().objects.select_for_update().get(pk=request.user.pk)
@@ -152,7 +156,20 @@ def build_plan(request, admin, op):
             "Matching set grew; request a new preview for background processing.",
             status=409,
         )
+    # Reject the whole plan before reading values if any member is hidden. Silently
+    # narrowing the set would change the meaning of the user's aggregate formulas.
+    for obj in objects:
+        row_allowed(request, admin, obj)
     originals = {str(obj.pk): original_values(obj, fields) for obj in objects}
+    aggregates = QueryAggregates(lambda name: [row[name] for row in originals.values()])
+    formulas = {}
+    for raw in parameters["assignments"].values():
+        if isinstance(raw, str) and raw.startswith("=") and raw not in formulas:
+            try:
+                formulas[raw] = ast(raw)
+            except FormulaError as exc:
+                raise SheetError(exc.code, str(exc)) from exc
+            require_fields(references(formulas[raw])["fields"], fields)
     prepared, errors = [], 0
     # Values used by Q-aggregates are captured from this same materialized set.
     for obj in objects:
@@ -166,13 +183,10 @@ def build_plan(request, admin, op):
                 if isinstance(raw, str) and raw.startswith("'="):
                     values[name] = raw[1:]
                 elif isinstance(raw, str) and raw.startswith("="):
-                    node = ast(raw)
-                    refs = references(node)
-                    require_fields(refs["fields"], fields)
                     values[name] = compute(
-                        node,
+                        formulas[raw],
                         fields=originals[pk],
-                        query=lambda n: [r[n] for r in originals.values()],
+                        query=aggregates,
                         today=dt.date.fromisoformat(parameters["today"]),
                     )
                 else:
@@ -199,6 +213,7 @@ def build_plan(request, admin, op):
         )
     OperationItem.objects.bulk_create(prepared, batch_size=200)
     op.total, op.errors, op.status = len(prepared), errors, "preview"
+    op.preview_expires_at = timezone.now() + timedelta(seconds=config()["preview_ttl_seconds"])
     op.save()
 
 
@@ -217,6 +232,11 @@ def enqueue(op, phase):
         )
 
 
+def require_fresh_preview(op):
+    if op.preview_expires_at is None or op.preview_expires_at <= timezone.now():
+        raise SheetError("expired_preview", "Create a new preview.", status=409)
+
+
 def run(request, admin, operation_id):
     check_model(request, admin, change=True, action="bulk")
     op = get_operation(request, admin, operation_id)
@@ -233,8 +253,7 @@ def run(request, admin, operation_id):
             raise SheetError(
                 "invalid_status", "Operation is not ready for confirmation.", status=409
             )
-        if op.updated_at < timezone.now() - timedelta(seconds=config()["preview_ttl_seconds"]):
-            raise SheetError("expired_preview", "Create a new preview.", status=409)
+        require_fresh_preview(op)
         if op.errors:
             raise SheetError(
                 "invalid_preview", "Fix preview errors and create a new preview.", status=409
@@ -347,8 +366,9 @@ def resume(request, admin, operation_id):
         if op.lease_until and op.lease_until > timezone.now():
             raise SheetError("worker_active", "A worker still owns this operation.", status=409)
         phase = "run" if op.parameters.get("confirmed") else "preview"
-        if phase == "preview" and op.items.exists():
+        if phase == "preview" and (op.preview_expires_at is not None or op.items.exists()):
             # A completed preview must never be rebuilt or implicitly confirmed.
+            require_fresh_preview(op)
             op.status, op.cancel_requested = "preview", False
             op.save()
             return report(request, admin, op, own=True)

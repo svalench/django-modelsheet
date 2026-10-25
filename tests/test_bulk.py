@@ -207,3 +207,211 @@ def test_saved_plan_cannot_use_now_hidden_source_field(api, products, monkeypatc
         and original(self, request, admin, field),
     )
     assert post(api, "bulk/run", {"operation": response.json()["id"]}).status_code == 403
+
+
+@pytest.mark.parametrize("policy_hook", [False, True])
+def test_preview_rejects_hidden_aggregate_sources(api, products, monkeypatch, policy_hook):
+    from modelsheet.permissions import PermissionPolicy
+
+    hidden = products[-1]
+    Product.objects.filter(pk=hidden.pk).update(price=Decimal("123.45"))
+    if policy_hook:
+        monkeypatch.setattr(
+            PermissionPolicy,
+            "can_view_object",
+            lambda self, request, admin, obj: obj.pk != hidden.pk,
+        )
+    else:
+        monkeypatch.setattr(
+            admin.site._registry[Product],
+            "has_view_permission",
+            lambda request, obj=None: obj is None or obj.pk != hidden.pk,
+        )
+    assert len(loaded(api)["rows"]) == 2
+    response = post(api, "bulk/preview", preview_payload(assignments={"price": "=QSUM([price])"}))
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "forbidden"
+    assert "123.45" not in response.content.decode()
+    assert not Operation.objects.exists()
+
+
+def test_background_preview_rechecks_sources_before_aggregation(
+    api, products, background, monkeypatch
+):
+    from modelsheet.errors import SheetError
+
+    response = post(api, "bulk/preview", preview_payload(assignments={"price": "=QSUM([price])"}))
+    assert response.status_code == 200
+    monkeypatch.setattr(
+        admin.site._registry[Product],
+        "has_view_permission",
+        lambda request, obj=None: obj is None or obj.pk != products[-1].pk,
+    )
+    with pytest.raises(SheetError) as exc:
+        process(*background.jobs.pop())
+    assert exc.value.code == "forbidden"
+    operation = Operation.objects.get(pk=response.json()["id"])
+    assert operation.status == "failed"
+    assert not operation.items.exists()
+
+
+@pytest.mark.parametrize("snapshot_state", ["expired", "deleted"])
+def test_preview_retry_uses_existing_plan_without_snapshot(api, products, snapshot_state):
+    from datetime import timedelta
+    from django.utils import timezone
+    from modelsheet.models import ViewSnapshot
+
+    view = loaded(api)
+    payload = preview_payload(selection=[products[0].pk], snapshot=view["snapshot"])
+    first = post(api, "bulk/preview", payload)
+    assert first.status_code == 200
+    if snapshot_state == "expired":
+        ViewSnapshot.objects.update(created_at=timezone.now() - timedelta(hours=1))
+    else:
+        ViewSnapshot.objects.all().delete()
+    retry = post(api, "bulk/preview", payload)
+    assert retry.status_code == 200
+    assert retry.json() == first.json()
+    assert Operation.objects.count() == 1
+    changed = post(api, "bulk/preview", {**payload, "assignments": {"price": "42"}})
+    assert changed.status_code == 409
+    assert changed.json()["error"]["code"] == "idempotency_conflict"
+
+
+def test_preview_retry_ignores_new_members_but_checks_access(api, products, settings, monkeypatch):
+    payload = preview_payload()
+    first = post(api, "bulk/preview", payload).json()
+    Product.objects.create(name="Later member", price=10, stock=1)
+    settings.MODELSHEET = {**settings.MODELSHEET, "max_bulk_rows": 3}
+    retry = post(api, "bulk/preview", payload)
+    assert retry.status_code == 200
+    assert retry.json() == first
+    monkeypatch.setattr(
+        admin.site._registry[Product], "has_change_permission", lambda request: False
+    )
+    assert post(api, "bulk/preview", payload).status_code == 403
+
+
+def test_bulk_aggregates_and_parsing_are_shared_within_each_plan(api, products, monkeypatch):
+    from collections import Counter
+    from modelsheet import bulk
+    from modelsheet.formula import engine
+
+    parses, aggregates = Counter(), Counter()
+    original_ast, original_aggregate = bulk.ast, engine.aggregate
+
+    def counted_ast(expression):
+        parses[expression] += 1
+        return original_ast(expression)
+
+    def counted_aggregate(name, values):
+        aggregates[name] += 1
+        return original_aggregate(name, values)
+
+    monkeypatch.setattr(bulk, "ast", counted_ast)
+    monkeypatch.setattr(engine, "aggregate", counted_aggregate)
+    formula = "=QSUM([price])+QAVG([price])+QCOUNT([price])"
+    payload = preview_payload(assignments={"price": formula, "stock": "=QCOUNT([price])"})
+    first = post(api, "bulk/preview", payload)
+    assert first.status_code == 200
+    assert first.json()["errors"] == 0
+    assert all(item["after"] == {"price": "43.00", "stock": 3} for item in first.json()["items"])
+    assert aggregates == {"SUM": 1, "AVG": 1, "COUNT": 1}
+    # Once for request validation and once for the plan, regardless of row count.
+    assert parses == {formula: 2, "=QCOUNT([price])": 2}
+    Product.objects.filter(pk=products[0].pk).update(price=20)
+    second = post(api, "bulk/preview", {**payload, "idempotency_key": "new-plan"})
+    assert second.status_code == 200
+    assert all(item["after"]["price"] == "56.33" for item in second.json()["items"])
+    assert aggregates == {"SUM": 2, "AVG": 2, "COUNT": 2}
+
+
+def test_expired_preview_cannot_be_renewed_by_cancel_resume(api, products, settings):
+    from datetime import timedelta
+    from django.utils import timezone
+
+    settings.MODELSHEET = {
+        **settings.MODELSHEET,
+        "background_adapter": "tests.test_bulk.TestAdapter",
+    }
+    result = post(api, "bulk/preview", preview_payload()).json()
+    operation = Operation.objects.get(pk=result["id"])
+    assert operation.preview_expires_at > timezone.now()
+    deadline = timezone.now() - timedelta(hours=1)
+    Operation.objects.filter(pk=operation.pk).update(preview_expires_at=deadline)
+    assert (
+        post(api, "bulk/run", {"operation": result["id"]}).json()["error"]["code"]
+        == "expired_preview"
+    )
+    assert post(api, f"operations/{result['id']}/cancel", {}).status_code == 200
+    response = post(api, f"operations/{result['id']}/resume", {})
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "expired_preview"
+    operation.refresh_from_db()
+    assert operation.preview_expires_at == deadline
+    assert operation.status == "cancelled"
+    assert not operation.items.filter(status="done").exists()
+    assert Product.objects.get(pk=products[0].pk).price == Decimal("10")
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_resume_preserves_deadline_and_empty_preview_membership(api, products, settings, empty):
+    settings.MODELSHEET = {
+        **settings.MODELSHEET,
+        "background_adapter": "tests.test_bulk.TestAdapter",
+    }
+    TestAdapter.jobs = []
+    state = {"filter": {"field": "stock", "op": "lt", "value": 0}} if empty else {}
+    result = post(api, "bulk/preview", preview_payload(state=state)).json()
+    operation = Operation.objects.get(pk=result["id"])
+    deadline = operation.preview_expires_at
+    # Changing TTL after planning must not extend an existing deadline.
+    settings.MODELSHEET = {**settings.MODELSHEET, "preview_ttl_seconds": 999999}
+    if empty:
+        Product.objects.filter(pk=products[0].pk).update(stock=-1)
+    for _ in range(2):
+        assert post(api, f"operations/{result['id']}/cancel", {}).status_code == 200
+        resumed = post(api, f"operations/{result['id']}/resume", {})
+        assert resumed.status_code == 200
+        assert resumed.json()["status"] == "preview"
+        assert resumed.json()["total"] == result["total"]
+        operation.refresh_from_db()
+        assert operation.preview_expires_at == deadline
+    assert TestAdapter.jobs == []
+    assert post(api, "bulk/run", {"operation": result["id"]}).json()["changed"] == result["total"]
+
+
+def test_background_deadline_starts_after_preparation_and_does_not_stop_confirmed_resume(
+    api, products, background
+):
+    from datetime import timedelta
+    from django.utils import timezone
+
+    result = post(api, "bulk/preview", preview_payload()).json()
+    operation = Operation.objects.get(pk=result["id"])
+    assert operation.preview_expires_at is None
+    Operation.objects.filter(pk=operation.pk).update(created_at=timezone.now() - timedelta(days=1))
+    process(*background.jobs.pop())
+    operation.refresh_from_db()
+    assert operation.preview_expires_at > timezone.now()
+    assert post(api, "bulk/run", {"operation": result["id"]}).json()["status"] == "queued"
+    background.jobs.clear()
+    deadline = timezone.now() - timedelta(hours=1)
+    Operation.objects.filter(pk=operation.pk).update(preview_expires_at=deadline)
+    assert post(api, f"operations/{result['id']}/cancel", {}).status_code == 200
+    assert post(api, f"operations/{result['id']}/resume", {}).json()["status"] == "queued"
+    process(*background.jobs.pop())
+    operation.refresh_from_db()
+    assert operation.status == "done" and operation.changed == 3
+    assert operation.preview_expires_at == deadline
+
+
+def test_cancel_before_background_preparation_can_resume(api, products, background):
+    result = post(api, "bulk/preview", preview_payload()).json()
+    background.jobs.clear()
+    assert post(api, f"operations/{result['id']}/cancel", {}).status_code == 200
+    assert post(api, f"operations/{result['id']}/resume", {}).json()["status"] == "preparing"
+    process(*background.jobs.pop())
+    operation = Operation.objects.get(pk=result["id"])
+    assert operation.status == "preview"
+    assert operation.preview_expires_at is not None

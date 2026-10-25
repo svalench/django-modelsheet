@@ -1,57 +1,64 @@
 # Release procedure
 
-## PyPI Trusted Publishing setup
+Version **0.3.0** is prepared locally; it has not been published. Do not create a tag,
+publish a GitHub Release or enable the publishing input until release approval.
 
-The publishing workflow is `.github/workflows/workflow.yml`. `ci.yml` only runs tests
-and cannot publish a package.
+## Local validation
 
-For the first upload, add a pending publisher at
-https://pypi.org/manage/account/publishing/ with these exact values:
+1. Preserve current changes. Synchronize `pyproject.toml`, `modelsheet/__init__.py`,
+   `frontend/package.json` and both root versions in `frontend/package-lock.json`.
+   Run `python scripts/check_release.py --stable --tag v0.3.0`.
+2. Run `python manage.py check`, `python manage.py makemigrations --check --dry-run`,
+   `python -m ruff check .` and `python -m pytest -q`.
+3. In `frontend`, run `npm ci`, `npm test`, `npm run build`, `npm run build:demo`,
+   `npx playwright install chromium` and `npm run test:e2e`. Review and include the
+   rebuilt production and playground assets in the release commit.
+4. Install `requirements-docs.txt`, run `python scripts/check_docs_locales.py` and
+   `mkdocs build --strict`, then run `npm run test:demo` in `frontend`.
+5. Build into an empty output directory with `python -m build --outdir /tmp/modelsheet-030-dist`,
+   then run `python -m twine check /tmp/modelsheet-030-dist/*`.
+6. Run `python scripts/package_smoke.py --wheel /tmp/modelsheet-030-dist/django_modelsheet-0.3.0-py3-none-any.whl`
+   and repeat with `--upgrade-from 0.3.0a2`. A local previous wheel path is also accepted.
+   These checks install outside the repository, migrate and collect static files;
+   the upgrade check preserves history/items/snapshots and expires legacy plans.
+   The virtualenv reuses installed system dependencies; it does not test fresh dependency resolution.
 
-| PyPI form field | Value |
+Migration `0002_operation_preview_expires_at` must ship alongside unchanged `0001`.
+Pause application writes and background workers during deployment, back up the database,
+install the release, migrate, collectstatic, restart and reload browser tabs. Rebuild legacy
+unconfirmed previews before confirming. Confirmed runs remain resumable. See the
+[upgrade notes](guide/releases.md) and [local validation report](validation.md).
+
+## CI and publishing gates
+
+`ci.yml` is reusable and checks all 16 Python/Django/database combinations, frontend
+unit tests, browser scenarios, wheel/sdist metadata, clean installation and upgrading
+from 0.3.0a2. It also calls `docs-checks.yml` for locale coverage, strict documentation,
+committed demo assets and playground browser tests. These validation workflows do not publish.
+
+`workflow.yml` first checks stable versions and the release tag, then calls the entire
+CI workflow on the same commit. The separate publish job depends on both checks and
+uses only the `pypi-distributions` artifact produced after all package checks pass.
+The full matrix must pass for the exact release commit; older green runs do not qualify.
+
+After approval, run **Publish to PyPI** on `main`, keeping `publish` unchecked for a
+validation-only run. Checking it uploads the current version. Alternatively, publishing
+GitHub Release `v0.3.0` starts the same gated workflow. Ordinary pushes never publish
+packages; manual publishing from other branches is disabled. A PyPI version cannot
+be replaced after upload, so any later changes require a new version.
+
+## Trusted Publishing
+
+Configure the existing PyPI project's publisher with these exact values:
+
+| Field | Value |
 | --- | --- |
-| PyPI project name | `django-modelsheet` |
-| GitHub owner | `svalench` |
-| Repository name | `django-modelsheet` |
-| Workflow name (filename, without the directory) | `workflow.yml` |
-| Environment name | `pypi` |
+| Project | `django-modelsheet` |
+| GitHub owner/repository | `svalench/django-modelsheet` |
+| Workflow filename | `workflow.yml` |
+| GitHub environment | `pypi` |
 
-If the project already belongs to your PyPI account, add the publisher through its
-Publishing settings instead. A pending publisher does not reserve the project name.
-No PyPI API token or GitHub secret is required: the publish job uses OIDC with
-job-scoped `id-token: write` and the `pypi` GitHub environment.
-
-After saving the publisher, open the repository's Actions tab, select **Publish to
-PyPI**, and choose **Run workflow** on `main`. Leave `publish` unchecked for a build
-check, or check it to upload the current version (`0.3.0a1` initially). The workflow
-builds the frontend, runs backend/unit/browser checks, builds wheel/sdist, tests
-installation, and only then passes the distributions to a separate publish job.
-
-Alternatively, publish a GitHub Release tagged `v0.3.0a1` (including a prerelease).
-Release tags must match the version in pyproject.toml. A published release starts
-the same workflow and uploads its artifacts after checks pass. Ordinary pushes do
-not publish. Manual uploads from branches other than `main` are disabled.
-
-Once a version is uploaded, its files cannot be replaced on PyPI; bump the version
-for the next release. Future versions must also update modelsheet/__init__.py.
-
-Official setup: https://docs.pypi.org/trusted-publishers/adding-a-publisher/
-
-## Maintainer checklist
-
-1. Run the full CI matrix, browser tests, package smoke test and migration checks.
-2. Inspect dependencies/notices and confirm the intended PyPI name is still available.
-3. Update version in pyproject.toml, modelsheet/__init__.py and frontend/package.json;
-   regenerate the lockfile. Update CHANGELOG and compatibility notes.
-4. Run `npm ci && npm run build` in frontend, then `python -m build` and
-   `python -m twine check dist/*`. Inspect wheel assets, templates, translations and migrations.
-5. Install the wheel in a clean virtualenv, run migrate and collectstatic, then test
-   upgrading a database from the previous published package. Preserve old migrations.
-6. Publish to TestPyPI using `python -m twine upload --repository testpypi dist/*`
-   only with explicit release authorization and configured credentials. Test installation
-   against TestPyPI, taking Django dependencies from the normal index.
-7. After review, tag and publish to PyPI through trusted publishing or maintainer credentials.
-
-No upload, repository push or public release is performed by local build commands.
-Check availability with `python scripts/check_pypi_name.py`; a 404 is a point-in-time
-observation, not reservation of the name.
+The publish job uses OIDC with job-scoped `id-token: write`; no PyPI token is needed.
+Configure environment protection in GitHub if an additional maintainer approval is desired.
+See [PyPI's publisher setup](https://docs.pypi.org/trusted-publishers/adding-a-publisher/).
+Local validation/build commands perform no upload, tag or repository push.

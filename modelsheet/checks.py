@@ -13,7 +13,7 @@ def check_configuration(app_configs, **kwargs):
     errors = []
     try:
         settings = config()
-        for label in settings["models"]:
+        for label in settings["models"] or ():
             try:
                 apps.get_model(label)
             except (ValueError, LookupError):

@@ -50,3 +50,5 @@ Preview building currently materializes up to max_bulk_rows in worker memory and
 uses one transaction to publish the plan. Size the limit for your model and database;
 it is not a streaming engine for unlimited datasets. Aggregates use captured preview
 inputs. A chunk checks current versions of its own target rows before writing.
+
+The preview deadline is fixed when preparation completes. Cancel/resume and changes to `preview_ttl_seconds` never extend it. An expired unconfirmed plan returns `expired_preview` (409); create a new preview. Resuming an empty preview keeps its original empty membership. Already confirmed runs can resume after the deadline.

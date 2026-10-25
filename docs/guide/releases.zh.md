@@ -1,5 +1,19 @@
 # 版本与限制
 
+## 0.3.0 · 已准备，待发布
+
+修复编辑缓冲区中的特殊字符串主键问题，并固定预览失效时间。包含检查权限后缓存的批量聚合、过期响应保护和自动发现 `ModelSheetAdmin`。发布必须通过完整 CI 矩阵、浏览器和安装包测试，以及严格的文档检查。
+
+0.3.0 已准备好，但尚未发布。当前可通过 `python -m pip install .` 安装本地代码。发布后：
+
+```bash
+python -m pip install --upgrade django-modelsheet==0.3.0
+```
+
+备份数据库并暂停应用写入和后台任务。安装新包，运行 `python manage.py migrate` 和 `python manage.py collectstatic --noinput`，然后重启应用及后台任务并刷新浏览器页面。迁移 `0002_operation_preview_expires_at` 保留审计历史、快照和操作明细。旧的未确认预览将保守地标记为过期，确认前必须重新预览。已确认的任务仍可恢复执行。
+
+预览截止时间在准备完成时固定。取消、恢复以及修改 `preview_ttl_seconds` 均不会延长截止时间。过期且未确认的计划返回 `expired_preview`（409），需要重新预览。恢复空预览会保留原始空记录集。已确认的任务在截止时间后仍可恢复执行。
+
 ## 0.3.0a2 · 2026 年 10 月 24 日
 
 修复未修改的数字单元格被标记为已修改、编辑器溢出和键盘导航时公式栏未更新的问题。在线演示在编辑后保持单元格标识稳定，并新增浏览器回归测试。
@@ -35,7 +49,7 @@ python -m pip install django-modelsheet==0.3.0a1
 
 在 [CI](https://github.com/svalench/django-modelsheet/actions/workflows/ci.yml) 检查所用组合；本地验证范围见[验证报告](../validation.md)。
 
-## Alpha 边界
+## 0.3.0 边界
 
 | 功能 | 当前行为 |
 | --- | --- |

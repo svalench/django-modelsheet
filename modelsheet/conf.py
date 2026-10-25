@@ -3,7 +3,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.utils.module_loading import import_string
 
 DEFAULTS = {
-    "models": [],
+    "models": None,
     "page_size": 200,
     "max_page_size": 500,
     "max_save_rows": 500,

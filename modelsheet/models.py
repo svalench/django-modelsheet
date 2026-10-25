@@ -32,6 +32,7 @@ class Operation(models.Model):
     cancel_requested = models.BooleanField(default=False)
     lease_until = models.DateTimeField(null=True)
     lease_token = models.UUIDField(null=True)
+    preview_expires_at = models.DateTimeField(null=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 

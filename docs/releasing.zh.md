@@ -1,35 +1,44 @@
-# 发布软件包
+# 发布流程
 
-## 配置 PyPI Trusted Publishing
+**0.3.0** 已在本地准备好，尚未发布。获得发布批准之前，不要创建标签、发布 GitHub Release 或启用发布选项。
 
-发布 workflow 为 `.github/workflows/workflow.yml`；`ci.yml` 只测试，不发布。
+## 本地验证
 
-首次发布在 [PyPI Publishing](https://pypi.org/manage/account/publishing/) 添加 pending publisher：
+1. 保留所有现有修改。同步 `pyproject.toml`、`modelsheet/__init__.py`、`frontend/package.json`
+   和 `frontend/package-lock.json` 中两个根版本，运行 `python scripts/check_release.py --stable --tag v0.3.0`。
+2. 运行 `python manage.py check`、`python manage.py makemigrations --check --dry-run`、
+   `python -m ruff check .` 和 `python -m pytest -q`。
+3. 在 `frontend` 中运行 `npm ci`、`npm test`、`npm run build`、`npm run build:demo`、
+   `npx playwright install chromium` 和 `npm run test:e2e`，检查并提交重新生成的静态资源。
+4. 安装 `requirements-docs.txt`，运行 `python scripts/check_docs_locales.py` 和
+   `mkdocs build --strict`，然后在 `frontend` 中运行 `npm run test:demo`。
+5. 构建到空目录：`python -m build --outdir /tmp/modelsheet-030-dist`，
+   然后运行 `python -m twine check /tmp/modelsheet-030-dist/*`。
+6. 运行 `python scripts/package_smoke.py --wheel /tmp/modelsheet-030-dist/django_modelsheet-0.3.0-py3-none-any.whl`，
+   再添加 `--upgrade-from 0.3.0a2` 重复检查。也可传入旧版 wheel 路径。
+   检查在仓库外安装、迁移和收集静态文件，并验证历史、明细和快照保留、旧计划过期。
+   虚拟环境复用系统依赖，不验证全新下载的依赖解析。
 
-| 字段 | 值 |
-| --- | --- |
-| 项目名 | `django-modelsheet` |
-| GitHub owner | `svalench` |
-| Repository | `django-modelsheet` |
-| Workflow 文件名 | `workflow.yml` |
-| Environment | `pypi` |
+保留原始 `0001` 并提供 `0002_operation_preview_expires_at`。升级前备份数据库，暂停应用写入和后台任务。
+安装新包后执行迁移与 collectstatic，重启应用及后台任务并刷新页面。旧的未确认计划需要重新预览；
+已确认任务仍可恢复。参见[升级说明](guide/releases.md)和[验证报告](validation.md)。
 
-已有项目应在项目 Publishing 设置中添加。Pending publisher 不预留名称。无需 API token 或 GitHub secret：任务使用 OIDC、`id-token: write` 和 `pypi` environment。
+## CI 与发布门槛
 
-保存后在 Actions 选择 **Publish to PyPI → Run workflow → main**。不勾 `publish` 只验证构建，勾选则上传当前版本。先构建 frontend、执行后端/单元/浏览器测试、构建 wheel/sdist 并验证安装，最后由独立任务上传。
+可复用的 `ci.yml` 检查全部 16 个 Python/Django/数据库组合、前端单元测试、浏览器场景、
+wheel/sdist 元数据、新安装及从 0.3.0a2 升级。它调用 `docs-checks.yml`，检查语言覆盖、
+严格文档构建、已提交的演示资源和演示浏览器测试。这些验证流程不发布任何内容。
 
-也可发布匹配版本的 GitHub Release（包括 prerelease），触发同一流程。Tag 必须与 `pyproject.toml` 版本一致；普通 push 不发布，非 main 分支禁止手动上传。已上传版本不可替换，后续必须升版本。
+`workflow.yml` 首先检查稳定版本和标签，再对同一提交调用完整 CI。发布任务依赖全部检查，
+仅使用验证成功后生成的 `pypi-distributions`。旧提交的绿色 CI 不能证明当前提交可发布。
 
-## 维护者检查清单
+获批后，在 `main` 上运行 **Publish to PyPI**。不勾选 `publish` 只执行验证；勾选才上传。
+发布 GitHub Release `v0.3.0` 也会触发相同检查和上传。普通 push 不发布包，其他分支不能手动上传。
+已上传的 PyPI 版本不能替换，后续更改必须使用新版本。
 
-1. 运行完整 CI 矩阵、浏览器、包安装与迁移检查。
-2. 检查依赖许可证和目标名称可用性。
-3. 更新 `pyproject.toml`、`modelsheet/__init__.py`、`frontend/package.json` 版本、lockfile、changelog 与兼容说明。
-4. 运行 frontend 的 `npm ci && npm run build`，再 `python -m build` 与 `python -m twine check dist/*`；检查静态资源、模板、翻译与迁移。
-5. 在干净环境安装 wheel，运行 migrate/collectstatic，验证从旧版升级，并保留历史迁移。
-6. 获得发布授权且已配置凭据后，用 `python -m twine upload --repository testpypi dist/*` 发布 TestPyPI 并验证安装；依赖从正式索引安装。
-7. 审核后打 tag，通过 Trusted Publishing 或维护者凭据发布 PyPI。
+## Trusted Publishing
 
-本地构建不会上传、push 或公开发布。`python scripts/check_pypi_name.py` 的 404 仅表示当时名称未占用，不代表预留。
-
-[PyPI 官方指南](https://docs.pypi.org/trusted-publishers/adding-a-publisher/)。
+为 PyPI 项目 `django-modelsheet` 配置发布者：仓库 `svalench/django-modelsheet`、
+工作流文件 `workflow.yml`、环境 `pypi`。仅发布任务通过 OIDC 使用 `id-token: write`，无需 PyPI token。
+参见 [PyPI 配置说明](https://docs.pypi.org/trusted-publishers/adding-a-publisher/)。
+本地验证和构建命令不会上传、创建标签或推送仓库。

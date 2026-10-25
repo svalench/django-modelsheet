@@ -20,8 +20,8 @@ Edit your models like a spreadsheet: select ranges, write formulas and preview b
 [Try live demo](playground.md){ .md-button }
 </div>
 
-<div class="ms-install"><span>$</span><code>pip install django-modelsheet==0.3.0a2</code></div>
-<div class="ms-facts"><span>MIT · open source</span><span>No Node.js required to install</span><span>0.3.0a2 · alpha</span></div>
+<div class="ms-install"><span>$</span><code>pip install .</code></div>
+<div class="ms-facts"><span>MIT · open source</span><span>No Node.js required to install</span><span>0.3.0 · prepared</span></div>
 </div>
 
 <div class="ms-preview" aria-label="Interactive pricing example">
@@ -106,5 +106,5 @@ class ProductAdmin(ModelSheetAdmin):
 </div>
 </div>
 
-!!! info "Public alpha · 0.3.0a2"
-    The package is available on [PyPI](https://pypi.org/project/django-modelsheet/0.3.0a2/). Creating and deleting records stays in standard Admin. Before adopting, read the [release limitations](guide/releases.md) and test the integration on your own models.
+!!! info "Stable release prepared · 0.3.0"
+    Publication is pending. Install this checkout with `pip install .`; after publication use `pip install django-modelsheet==0.3.0`. Read the [upgrade notes and limitations](guide/releases.md) before deployment.

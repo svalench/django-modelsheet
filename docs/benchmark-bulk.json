@@ -1,0 +1,46 @@
+{
+  "python": "3.13.7",
+  "django": "6.0.4",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "database": "temporary SQLite",
+  "repeats": 3,
+  "comparison": "Same complete preview builder; only aggregate cache enabled/disabled",
+  "results": [
+    {
+      "rows": 100,
+      "aggregate_cache": false,
+      "median_preview_ms": 111.23,
+      "aggregate_value_visits": 30000
+    },
+    {
+      "rows": 100,
+      "aggregate_cache": true,
+      "median_preview_ms": 71.15,
+      "aggregate_value_visits": 200
+    },
+    {
+      "rows": 500,
+      "aggregate_cache": false,
+      "median_preview_ms": 1468.49,
+      "aggregate_value_visits": 750000
+    },
+    {
+      "rows": 500,
+      "aggregate_cache": true,
+      "median_preview_ms": 174.21,
+      "aggregate_value_visits": 1000
+    },
+    {
+      "rows": 1000,
+      "aggregate_cache": false,
+      "median_preview_ms": 5499.61,
+      "aggregate_value_visits": 3000000
+    },
+    {
+      "rows": 1000,
+      "aggregate_cache": true,
+      "median_preview_ms": 615.74,
+      "aggregate_value_visits": 2000
+    }
+  ]
+}

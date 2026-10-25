@@ -2,10 +2,19 @@ import {coordinates, evaluate, FormulaError, parse, references} from './formula'
 
 export interface Row {pk: string; version: string; values: Record<string, any>}
 type Changes = Record<string, Record<string, any>>;
-const copy = <T>(value: T): T => structuredClone(value);
+const emptyChanges = (): Changes => Object.create(null);
+// structuredClone does not retain null prototypes. Rebuild both dictionaries so
+// arbitrary model PKs/field names stay data through every undo/redo snapshot.
+const copy = (value: Changes): Changes => {
+  const result = emptyChanges();
+  for (const [pk, fields] of Object.entries(value)) {
+    result[pk] = Object.assign(Object.create(null), structuredClone(fields));
+  }
+  return result;
+};
 
 export class EditBuffer {
-  changes: Changes = {};
+  changes: Changes = emptyChanges();
   private past: Changes[] = [];
   private future: Changes[] = [];
   constructor(public rows: Row[], public columns: string[], public editable: Set<string>, public today: string) {}
@@ -23,7 +32,7 @@ export class EditBuffer {
     for (const edit of edits) {
       const row = this.rows.find(row => row.pk === edit.pk);
       if (!row || !this.editable.has(edit.field)) { skipped++; continue; }
-      next[edit.pk] ??= {};
+      next[edit.pk] ??= Object.create(null);
       const original = row.values[edit.field];
       // Input editors return strings even when JSON supplied a number/bool/null.
       // Recognize only their unchanged editor representation, without coercing
@@ -42,7 +51,7 @@ export class EditBuffer {
   }
   undo() { if (this.past.length) { this.future.push(copy(this.changes)); this.changes = this.past.pop()!; } }
   redo() { if (this.future.length) { this.past.push(copy(this.changes)); this.changes = this.future.pop()!; } }
-  clear() { this.changes = {}; this.past = []; this.future = []; }
+  clear() { this.changes = emptyChanges(); this.past = []; this.future = []; }
   payload() { return Object.entries(this.changes).map(([pk, values]) => ({pk, values, version: this.rows.find(row => row.pk === pk)!.version})); }
   value(pk: string, field: string): any {
     const visiting = new Set<string>(), cache = new Map<string, any>();

@@ -2,17 +2,51 @@ from datetime import timedelta
 from io import StringIO
 
 import pytest
+from django.contrib import admin
 from django.contrib.auth.models import Group
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import IntegrityError
+from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 
+from demo.shop.models import Category, Order, Product
 from modelsheet.adapters import SaveAdapter
 from modelsheet.checks import check_configuration
 from modelsheet.models import Operation, ViewSnapshot
-from .conftest import loaded, post, preview_payload, save_payload
+from .conftest import BASE, loaded, post, preview_payload, save_payload
 
 pytestmark = pytest.mark.django_db(transaction=True)
+
+
+def test_registered_sheet_works_without_settings(api, products, settings):
+    del settings.MODELSHEET
+    assert not check_configuration(None)
+    view = loaded(api)
+    assert api.get(BASE + "schema/").status_code == 200
+    assert post(api, "save", save_payload(view, {"price": "12"})).status_code == 200
+    products[0].refresh_from_db()
+    assert str(products[0].price) == "12.00"
+
+
+@pytest.mark.parametrize("models", [[], ["shop.Order"]])
+def test_explicit_model_restriction_still_applies(api, settings, models):
+    settings.MODELSHEET = {"models": models}
+    response = api.get(BASE + "schema/")
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_enabled"
+
+
+def test_disabled_sheet_stays_unavailable(api, monkeypatch):
+    monkeypatch.setattr(admin.site._registry[Product], "sheet_enabled", False)
+    response = api.get(BASE + "schema/")
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_enabled"
+
+
+def test_ordinary_admin_does_not_get_sheet_routes():
+    with pytest.raises(NoReverseMatch):
+        reverse("admin:shop_category_sheet_schema")
 
 
 def test_roles_are_opt_in_and_idempotent(user):
@@ -30,6 +64,48 @@ def test_roles_are_opt_in_and_idempotent(user):
         .permissions.filter(codename="change_product")
         .exists()
     )
+    assert Group.objects.get(name="ModelSheet Viewer").permissions.filter(
+        content_type__app_label="shop", codename="view_product"
+    ).exists()
+    assert not Group.objects.get(name="ModelSheet Viewer").permissions.filter(
+        content_type__app_label="shop", codename="view_category"
+    ).exists()
+
+
+@pytest.mark.parametrize("restrict", ["settings", "admin"])
+def test_roles_only_include_enabled_models(settings, monkeypatch, restrict):
+    if restrict == "settings":
+        settings.MODELSHEET = {"models": ["shop.Product"]}
+    else:
+        monkeypatch.setattr(admin.site._registry[Order], "sheet_enabled", False)
+    call_command("modelsheet_roles", stdout=StringIO())
+    permissions = Group.objects.get(name="ModelSheet Editor").permissions
+    assert permissions.filter(codename="view_product").exists()
+    assert not permissions.filter(codename="view_order").exists()
+    assert not permissions.filter(codename="view_field_shop_order_total").exists()
+
+
+def test_roles_discover_custom_admin_sites(settings):
+    from modelsheet.admin import ModelSheetAdmin
+
+    class CategoryAdmin(ModelSheetAdmin):
+        sheet_fields = ("name",)
+
+    site = admin.AdminSite(name="custom")
+    site.register(Category, CategoryAdmin)
+    settings.MODELSHEET = {"models": ["shop.Category"]}
+    call_command("modelsheet_roles", stdout=StringIO())
+    permissions = Group.objects.get(name="ModelSheet Viewer").permissions
+    assert permissions.filter(codename="view_category").exists()
+    assert permissions.filter(codename="view_field_shop_category_name").exists()
+    assert not permissions.filter(codename="view_product").exists()
+
+
+def test_roles_require_an_enabled_admin(settings):
+    settings.MODELSHEET = {"models": []}
+    with pytest.raises(CommandError, match="Register an enabled ModelSheetAdmin"):
+        call_command("modelsheet_roles", stdout=StringIO())
+    assert not Group.objects.filter(name__startswith="ModelSheet").exists()
 
 
 def test_invalid_configuration_reported(settings):

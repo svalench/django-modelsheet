@@ -2,11 +2,11 @@
 
 ## 没有 Spreadsheet 按钮
 
-确认安装并迁移了 `modelsheet`，`app.Model` 在允许列表中，已注册 Admin 继承 `ModelSheetAdmin`，并正确配置 `sheet_fields` 和用户权限。运行 `python manage.py check`。
+确认安装并迁移了 `modelsheet`，已注册 Admin 继承 `ModelSheetAdmin`，并正确配置 `sheet_fields` 和用户权限。运行 `python manage.py check`。
 
 ## 字段只读
 
-字段必须在 `sheet_editable` 中。`readonly_fields`、模型和字段权限、对象级 Admin hooks 以及项目策略同样生效。Alpha 版不支持编辑 FK/M2M 或计算列。
+字段必须在 `sheet_editable` 中。`readonly_fields`、模型和字段权限、对象级 Admin hooks 以及项目策略同样生效。0.3.0不支持编辑 FK/M2M 或计算列。
 
 ## 保存冲突
 

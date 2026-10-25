@@ -15,3 +15,12 @@ Browser E2E includes a separate 100k-result / 50-column fixture with a 200-row
 loaded window. That test records scroll frame intervals and bounded DOM rows;
 it does not claim that a browser holds all 100k records. API timing and scroll
 timing measure different parts of the system.
+
+`python scripts/benchmark_bulk.py --rows 100 500 1000 --repeats 3` measures complete
+bulk previews containing `QSUM` and repeated `QCOUNT` calls in a separate temporary
+SQLite database. It compares the same plan builder with aggregate caching enabled
+and disabled, reporting median preview time and the number of values visited by
+aggregate calculations. This isolates caching, rather than comparing releases.
+For this fixed formula set, cached aggregate visits grow linearly with row count.
+The script adjusts the formula step limit to the requested dataset size; production
+limits remain unchanged. Model validation and database writes are included in timing.

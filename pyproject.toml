@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-modelsheet"
-version = "0.3.0a2"
+version = "0.3.0"
 description = "Spreadsheet editing, formulas and previewed bulk operations for Django Admin"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 dependencies = ["Django>=5.2,<6.2"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 5 - Production/Stable",
   "Framework :: Django",
   "Framework :: Django :: 5.2",
   "Framework :: Django :: 6.0",
@@ -26,7 +26,7 @@ Issues = "https://github.com/svalench/django-modelsheet/issues"
 Changelog = "https://github.com/svalench/django-modelsheet/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-test = ["pytest>=8", "pytest-django>=4.9", "pytest-timeout>=2", "build", "ruff", "playwright"]
+test = ["pytest>=8", "pytest-django>=4.9", "pytest-timeout>=2", "build", "ruff", "playwright", "PyYAML>=6"]
 postgres = ["psycopg[binary]>=3.2"]
 mysql = ["mysqlclient>=2.2"]
 

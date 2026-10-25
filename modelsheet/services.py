@@ -18,6 +18,7 @@ from .metadata import fields_for, require_fields
 from .models import Operation, OperationItem, ViewSnapshot
 from .permissions import require_access
 from .query import parse_state, queryset
+from .registry import is_enabled
 
 
 def digest(value):
@@ -72,7 +73,7 @@ def write_transaction():
 
 
 def check_model(request, admin, **kwargs):
-    if admin.model._meta.label not in config()["models"] or not admin.sheet_enabled:
+    if not is_enabled(admin):
         raise SheetError("not_enabled", "This model is not enabled.", status=404)
     require_access(request, admin, **kwargs)
 

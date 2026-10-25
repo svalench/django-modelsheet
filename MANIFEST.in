@@ -10,4 +10,5 @@ prune frontend/playwright-report
 recursive-include tests *.py *.json
 recursive-include demo *.py
 recursive-include scripts *.py
+recursive-include .github/workflows *.yml
 include manage.py

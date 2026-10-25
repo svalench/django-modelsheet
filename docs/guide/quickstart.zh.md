@@ -2,22 +2,23 @@
 
 为已有的 `shop.Product` 模型添加表格：价格和库存可编辑，名称只读，库存金额通过公式计算。
 
-## 1. 安装 Alpha 版
+## 1. 安装 0.3.0
+
+0.3.0 已准备好，但尚未发布。当前可通过 `python -m pip install .` 安装本地代码。发布后：
 
 ```bash
-python -m pip install django-modelsheet==0.3.0a2
+python -m pip install django-modelsheet==0.3.0
 ```
 
 软件包包含编译后的 JS/CSS，无需 Node.js、npm 或 CDN。没有现成项目时，可先运行[演示项目](demo.md)。
 
-## 2. 允许访问模型
+## 2. 添加应用
 
 ```python title="settings.py"
 INSTALLED_APPS += ["modelsheet"]
-MODELSHEET = {"models": ["shop.Product"], "page_size": 200}
 ```
 
-模型必须同时加入允许列表，并通过 `ModelSheetAdmin` 注册。
+按下文通过 `ModelSheetAdmin` 注册模型即可，无需在设置中另列模型。
 
 === "SQLite"
 
@@ -68,7 +69,7 @@ python manage.py collectstatic --noinput
 python manage.py check
 ```
 
-模型必须同时加入允许列表，并通过 `ModelSheetAdmin` 注册。
+迁移创建视图快照和操作日志。无需向业务模型添加字段或继承新基类。
 
 ## 5. 打开表格
 

@@ -20,8 +20,8 @@ hide:
 [在线试用](playground.md){ .md-button }
 </div>
 
-<div class="ms-install"><span>$</span><code>pip install django-modelsheet==0.3.0a2</code></div>
-<div class="ms-facts"><span>MIT · open source</span><span>安装无需 Node.js</span><span>0.3.0a2 · alpha</span></div>
+<div class="ms-install"><span>$</span><code>pip install .</code></div>
+<div class="ms-facts"><span>MIT · open source</span><span>安装无需 Node.js</span><span>0.3.0 · 待发布</span></div>
 </div>
 
 <div class="ms-preview" aria-label="交互式价格计算示例">
@@ -106,5 +106,5 @@ class ProductAdmin(ModelSheetAdmin):
 </div>
 </div>
 
-!!! info "公开 Alpha 版 · 0.3.0a2"
-    软件包已发布至 [PyPI](https://pypi.org/project/django-modelsheet/0.3.0a2/). 创建和删除记录仍通过标准 Admin 完成。正式使用前，请阅读 [版本限制](guide/releases.md) ，并在自己的模型上验证集成效果。
+!!! info "稳定版已准备 · 0.3.0"
+    此版本尚未发布。可通过 `pip install .` 安装当前代码；发布后使用 `pip install django-modelsheet==0.3.0`。部署前请阅读[升级说明与限制](guide/releases.md)。

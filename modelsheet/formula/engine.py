@@ -190,6 +190,34 @@ def number(value):
         raise FormulaError("#VALUE!", "Expected a number")
 
 
+class QueryAggregates:
+    """Lazy aggregate cache owned by one immutable, permission-checked bulk plan."""
+
+    def __init__(self, query):
+        self.query = query
+        self.columns = {}
+        self.results = {}
+
+    def evaluate(self, name, field, tick):
+        if field not in self.columns:
+            self.columns[field] = self.query(field)
+        values = self.columns[field]
+        # A cache hit must not bypass the formula's logical work budget.
+        tick(len(values))
+        key = name, field
+        if key not in self.results:
+            try:
+                self.results[key] = aggregate(name, values)
+            except FormulaError as exc:
+                self.results[key] = exc
+            except (ArithmeticError, TypeError, ValueError):
+                self.results[key] = FormulaError("#VALUE!", "Invalid operand")
+        result = self.results[key]
+        if isinstance(result, FormulaError):
+            raise FormulaError(result.code, str(result))
+        return result
+
+
 def evaluate(
     node,
     *,
@@ -305,6 +333,8 @@ def evaluate(
             arity(args, 1, 1)
             if query is None or args[0][0] != "field":
                 raise FormulaError("#REF!", "Query aggregates require a bulk field reference")
+            if isinstance(query, QueryAggregates):
+                return query.evaluate(name[1:], args[0][1], tick)
             values = query(args[0][1])
             tick(len(values))
             return aggregate(name[1:], values)

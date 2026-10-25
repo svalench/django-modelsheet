@@ -73,4 +73,4 @@ LANGUAGE_CODE = "en"
 LANGUAGES = [("en", "English"), ("ru", "Русский")]
 TIME_ZONE = "UTC"
 USE_TZ = True
-MODELSHEET = {"models": ["shop.Product", "shop.Order"], "page_size": 200}
+MODELSHEET = {"page_size": 200}

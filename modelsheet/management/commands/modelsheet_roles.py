@@ -2,12 +2,12 @@ from django.contrib.auth.models import Group, Permission
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from modelsheet.conf import config
-from modelsheet.permissions import create_permissions
+from modelsheet.permissions import codename, create_permissions
+from modelsheet.registry import enabled_admins
 
 
 class Command(BaseCommand):
-    help = "Create opt-in groups for configured models (does not assign users)."
+    help = "Create opt-in groups for registered sheet models (does not assign users)."
 
     def add_arguments(self, parser):
         parser.add_argument("--prefix", default="ModelSheet")
@@ -16,8 +16,22 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         from django.apps import apps
 
+        admins = list(enabled_admins())
+        if not admins:
+            raise CommandError("Register an enabled ModelSheetAdmin first")
         create_permissions(apps.get_app_config("modelsheet"))
-        permissions = Permission.objects.filter(content_type__app_label="modelsheet")
+        names = {"open"}
+        for model_admin in admins:
+            model = model_admin.model
+            names.update(codename(action, model) for action in ("bulk", "history", "undo"))
+            names.update(
+                codename(action, model, field)
+                for field in model_admin.sheet_fields
+                for action in ("view_field", "edit_field")
+            )
+        permissions = Permission.objects.filter(
+            content_type__app_label="modelsheet", codename__in=names
+        )
         definitions = {
             "Viewer": ("view_field_",),
             "Editor": ("view_field_", "edit_field_"),
@@ -25,15 +39,12 @@ class Command(BaseCommand):
             "Auditor": ("view_field_", "history_"),
             "Admin": ("view_field_", "edit_field_", "bulk_", "history_"),
         }
-        if not config()["models"]:
-            raise CommandError("Configure MODELSHEET.models first")
         for role, prefixes in definitions.items():
             group, _ = Group.objects.get_or_create(name=f"{options['prefix']} {role}")
             selected = [
                 p for p in permissions if p.codename == "open" or p.codename.startswith(prefixes)
             ]
-            for label in config()["models"]:
-                model = apps.get_model(label)
+            for model in {model_admin.model for model_admin in admins}:
                 actions = ["view"] + (["change"] if role in ("Editor", "Operator", "Admin") else [])
                 selected.extend(
                     Permission.objects.filter(

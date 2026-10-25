@@ -191,3 +191,165 @@ test('copied positional formulas fail explicitly after changing pages', async ({
   await expect(page.locator('span[role=status]')).toContainText('older view');
   await expect(page.getByRole('button',{name:'Save',exact:true})).toBeDisabled();
 });
+
+test('pending save locks every edit path and a failed save preserves its buffer and retry key', async ({page}) => {
+  const cell = page.locator('.tabulator-row').first().locator('[tabulator-field=stock]');
+  await cell.click();
+  const formula = page.getByLabel('Formula', {exact:true});
+  await formula.fill('73'); await formula.press('Enter');
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const requests: any[] = [];
+  await page.route('**/sheet/save/', async route => {
+    requests.push(route.request().postDataJSON());
+    if (requests.length === 1) {
+      await pending;
+      await route.fulfill({status:503, json:{error:{code:'database_busy',message:'Retry this save'}}});
+    } else await route.continue();
+  });
+  await page.getByRole('button', {name:'Save',exact:true}).click();
+  try {
+    await expect.poll(() => requests.length).toBe(1);
+    await expect(formula).toBeDisabled();
+    for (const name of ['Undo','Redo','Fill down','Next','Bulk change']) {
+      await expect(page.getByRole('button', {name,exact:true})).toBeDisabled();
+    }
+    // Clipboard/keyboard events must also be guarded, independently of disabled buttons.
+    await cell.evaluate(element => {
+      const data = new DataTransfer(); data.setData('text/plain', '999');
+      element.dispatchEvent(new ClipboardEvent('paste', {bubbles:true,clipboardData:data}));
+      element.dispatchEvent(new ClipboardEvent('cut', {bubbles:true,clipboardData:data}));
+      element.dispatchEvent(new KeyboardEvent('keydown', {key:'Delete',bubbles:true}));
+      element.dispatchEvent(new KeyboardEvent('keydown', {key:'z',ctrlKey:true,bubbles:true}));
+      element.dispatchEvent(new KeyboardEvent('keydown', {key:'d',ctrlKey:true,bubbles:true}));
+    });
+  } finally { release(); }
+  await expect(page.locator('[role=status]')).toContainText('Retry this save');
+  // Tabulator redraw may move the active cell; reselect the edited value.
+  await cell.click();
+  await expect(formula).toBeEnabled();
+  await expect(formula).toHaveValue('73');
+  await expect(cell).toHaveText('73');
+  await page.getByRole('button', {name:'Save',exact:true}).click();
+  await expect(page.locator('[role=status]')).toContainText('Saved');
+  expect(requests).toHaveLength(2);
+  expect(requests[1]).toEqual(requests[0]);
+  await expect(cell).toHaveText('73');
+  await expect(page.getByRole('button', {name:'Save',exact:true})).toBeDisabled();
+});
+
+for (const mutation of ['remove assignment','add assignment','remove condition','add condition','add group','remove group','input']) {
+  test(`bulk preview is invalidated by ${mutation}`, async ({page}) => {
+    await page.route('**/sheet/bulk/preview/', route => route.fulfill({json:{
+      id:'preview1',status:'preview',total:1,changed:0,errors:0,items:[],has_next:false,
+    }}));
+    await page.getByRole('button', {name:'Bulk change',exact:true}).click();
+    const dialog = page.locator('dialog');
+    await dialog.getByRole('button', {name:'Add condition',exact:true}).first().click();
+    await dialog.getByRole('button', {name:'Add group',exact:true}).first().click();
+    await dialog.getByRole('button', {name:'Preview',exact:true}).click();
+    const confirm = dialog.getByRole('button', {name:'Confirm',exact:true});
+    await expect(confirm).toBeEnabled();
+    const group = dialog.locator('.ms-filter-group').first();
+    if (mutation === 'remove assignment') await dialog.getByPlaceholder('Value or formula').locator('..').getByRole('button',{name:'Remove',exact:true}).click();
+    if (mutation === 'add assignment') await dialog.getByRole('button',{name:'Add assignment',exact:true}).click();
+    if (mutation === 'remove condition') await group.locator('.ms-condition').first().getByRole('button',{name:'Remove',exact:true}).click();
+    if (mutation === 'add condition') await group.getByRole('button',{name:'Add condition',exact:true}).first().click();
+    if (mutation === 'add group') await group.getByRole('button',{name:'Add group',exact:true}).first().click();
+    if (mutation === 'remove group') await group.locator('.ms-filter-group').getByRole('button',{name:'Remove',exact:true}).click();
+    if (mutation === 'input') await dialog.getByPlaceholder('Value or formula').fill('22');
+    await expect(confirm).toBeDisabled();
+    await expect(dialog.locator('.ms-report')).toBeEmpty();
+  });
+}
+
+test('late preview responses cannot restore confirmation after inputs change', async ({page}) => {
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  let received = 0;
+  await page.route('**/sheet/bulk/preview/', async route => {
+    received++;
+    if (received === 1) {
+      await pending;
+      await route.fulfill({json:{id:'stale',status:'preview',total:1,changed:0,errors:0,items:[],has_next:false}});
+    } else await route.fulfill({status:400,json:{error:{code:'invalid_value',message:'New preview rejected'}}});
+  });
+  await page.getByRole('button',{name:'Bulk change',exact:true}).click();
+  const dialog = page.locator('dialog');
+  await dialog.getByRole('button',{name:'Preview',exact:true}).click();
+  try {
+    await expect.poll(() => received).toBe(1);
+    await dialog.getByPlaceholder('Value or formula').fill('42');
+    await dialog.getByRole('button',{name:'Preview',exact:true}).click();
+    await expect(dialog.locator('.ms-report')).toContainText('New preview rejected');
+    const stale = page.waitForResponse(response => response.url().endsWith('/bulk/preview/') && response.status() === 200);
+    release();
+    await (await stale).finished();
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+    await expect(dialog.locator('.ms-report')).toContainText('New preview rejected');
+    await expect(dialog.getByRole('button',{name:'Confirm',exact:true})).toBeDisabled();
+  } finally { release(); }
+});
+
+for (const source of ['poll', 'resume']) {
+  test(`late ${source} response cannot restore an invalidated preview`, async ({page}) => {
+    const operation = {id:'pending-preview',status:source === 'poll' ? 'preparing' : 'cancelled',total:1,changed:0,errors:0,items:[],has_next:false};
+    await page.route('**/sheet/bulk/preview/', route => route.fulfill({json:operation}));
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    let received = false;
+    const routePath = `/operations/${operation.id}/${source === 'resume' ? 'resume/' : ''}`;
+    await page.route('**' + routePath, async route => {
+      received = true; await pending;
+      await route.fulfill({json:{...operation,status:'preview'}});
+    });
+    await page.getByRole('button',{name:'Bulk change',exact:true}).click();
+    const dialog = page.locator('dialog');
+    await dialog.getByRole('button',{name:'Preview',exact:true}).click();
+    if (source === 'resume') await dialog.getByRole('button',{name:'Resume',exact:true}).click();
+    try {
+      await expect.poll(() => received).toBe(true);
+      await dialog.getByPlaceholder('Value or formula').fill('99');
+      const stale = page.waitForResponse(response => response.url().endsWith(routePath));
+      release();
+      await (await stale).finished();
+      await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+      await expect(dialog.getByRole('button',{name:'Confirm',exact:true})).toBeDisabled();
+      await expect(dialog.locator('.ms-report')).toBeEmpty();
+    } finally { release(); }
+  });
+}
+
+test('string primary keys preserve edits through undo, redo and save', async ({page}) => {
+  const rows = ['__proto__', 'constructor', 'toString'].map(pk => ({pk, version:'fixture', values:{stock:10}}));
+  await page.route('**/sheet/schema/', route => route.fulfill({json:{
+    fields:[{name:'stock', label:'Stock', type:'IntegerField', editable:true, choices:[]}],
+    computed:[], page_size:200, max_save_rows:500, can_bulk:false, can_history:false,
+  }}));
+  await page.route('**/sheet/rows/?**', route => route.fulfill({json:{
+    rows, snapshot:'fixture', state:{q:'', filter:{}, sort:[], offset:0, limit:200, columns:['stock']},
+    today:'2026-10-25', count:rows.length, has_next:false,
+  }}));
+  let submitted: any;
+  await page.route('**/sheet/save/', async route => {
+    submitted = route.request().postDataJSON();
+    for (const change of submitted.changes) rows.find(row => row.pk === change.pk)!.values.stock = Number(change.values.stock);
+    await route.fulfill({json:{status:'done'}});
+  });
+  await page.reload();
+  for (let i=0; i<rows.length; i++) {
+    await page.locator('.tabulator-row').nth(i).locator('[tabulator-field=stock]').click();
+    await page.getByLabel('Formula', {exact:true}).fill(String(20+i));
+    await page.getByLabel('Formula', {exact:true}).press('Enter');
+  }
+  await page.getByRole('button', {name:'Undo', exact:true}).click();
+  await expect(page.locator('.tabulator-row').nth(2).locator('[tabulator-field=stock]')).toHaveText('10');
+  await page.getByRole('button', {name:'Redo', exact:true}).click();
+  await expect(page.locator('.tabulator-row').nth(2).locator('[tabulator-field=stock]')).toHaveText('22');
+  await page.getByRole('button', {name:'Save', exact:true}).click();
+  await expect(page.locator('span[role=status]')).toContainText('Saved');
+  expect(submitted.changes).toEqual(rows.map((row, i) => ({pk:row.pk, version:'fixture', values:{stock:String(20+i)}})));
+  expect(await page.evaluate(() => Object.hasOwn(Object.prototype, 'stock'))).toBe(false);
+  await expect(page.getByRole('button', {name:'Save', exact:true})).toBeDisabled();
+  for (let i=0; i<rows.length; i++) await expect(page.locator('.tabulator-row').nth(i).locator('[tabulator-field=stock]')).toHaveText(String(20+i));
+});

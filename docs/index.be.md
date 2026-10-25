@@ -20,8 +20,8 @@ hide:
 [Паспрабаваць дэма](playground.md){ .md-button }
 </div>
 
-<div class="ms-install"><span>$</span><code>pip install django-modelsheet==0.3.0a2</code></div>
-<div class="ms-facts"><span>MIT · open source</span><span>Усталяванне без Node.js</span><span>0.3.0a2 · alpha</span></div>
+<div class="ms-install"><span>$</span><code>pip install .</code></div>
+<div class="ms-facts"><span>MIT · open source</span><span>Усталяванне без Node.js</span><span>0.3.0 · падрыхтавана</span></div>
 </div>
 
 <div class="ms-preview" aria-label="Інтэрактыўны прыклад разліку цэн">
@@ -106,5 +106,5 @@ class ProductAdmin(ModelSheetAdmin):
 </div>
 </div>
 
-!!! info "Адкрытая альфа · 0.3.0a2"
-    Пакет ужо даступны ў [PyPI](https://pypi.org/project/django-modelsheet/0.3.0a2/). Стварэнне і выдаленне запісаў застаюцца ў стандартным Admin. Перад укараненнем вывучыце [абмежаванні версіі](guide/releases.md) і праверце інтэграцыю на сваіх мадэлях.
+!!! info "Стабільны выпуск падрыхтаваны · 0.3.0"
+    Публікацыя яшчэ не выканана. Усталюйце гэтую копію рэпазіторыя праз `pip install .`; пасля публікацыі выкарыстоўвайце `pip install django-modelsheet==0.3.0`. Прачытайце [нататкі аб абнаўленні і абмежаванні](guide/releases.md).

@@ -2,9 +2,10 @@
 
 `settings.MODELSHEET` аб'ядноўваецца са змаўчаннямі, у тым ліку ключы ў секцыі `formula`.
 
+Налады неабавязковыя: рэгістрацыя праз `ModelSheetAdmin` уключае табліцу. Каб адключыць яе, задайце `sheet_enabled = False` у Admin. Калі зададзены `models`, даступныя толькі мадэлі са спіса, зарэгістраваныя праз `ModelSheetAdmin`.
+
 ```python title="settings.py"
 MODELSHEET = {
-    "models": ["shop.Product", "shop.Order"],
     "page_size": 200,
     "max_page_size": 500,
     "max_save_rows": 500,
@@ -28,7 +29,7 @@ MODELSHEET = {
 
 | Налада | Змаўчанне | Прызначэнне |
 | --- | --- | --- |
-| `models` | `[]` | Яўны спіс `app.Model` |
+| `models` | `None` | Неабавязковае абмежаванне `app.Model`; `[]` адключае ўсе табліцы |
 | `page_size` / `max_page_size` | `200` / `500` | Звычайны / найбольшы памер старонкі |
 | `max_save_rows` | `500` | Максімум радкоў звычайнага захавання |
 | `count_mode` | `"exact"` | `exact` або `none`; none не выконвае COUNT |

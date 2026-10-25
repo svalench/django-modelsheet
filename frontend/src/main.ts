@@ -53,7 +53,7 @@ async function start() {
   };
   const button = (label: string, action: () => any, parent: HTMLElement, className = '') => {
     const node = element('button', t(label), className); node.type = 'button';
-    node.addEventListener('click', () => { Promise.resolve().then(action).catch(showError); }); parent.append(node); return node;
+    node.addEventListener('click', () => { Promise.resolve().then(() => { if (!busy) return action(); }).catch(showError); }); parent.append(node); return node;
   };
   const toolbar = element('div', '', 'ms-toolbar'); root.append(toolbar);
   const saveButton = button('Save', save, toolbar, 'ms-primary');
@@ -75,6 +75,7 @@ async function start() {
   formulaBar.append(element('span', 'ƒx', 'ms-fx'));
   const formulaInput = element('input'); formulaInput.setAttribute('aria-label', 'Formula'); formulaBar.append(formulaInput);
   formulaInput.addEventListener('keydown', event => {
+    if (busy) return;
     if (event.key === 'Enter' && active) { edit(active.getRow().getData().__modelsheet_pk, active.getField(), formulaInput.value); active.getElement().tabIndex=0; active.getElement().focus(); }
     if (event.key === 'Escape') updateFormulaBar();
   });
@@ -86,6 +87,16 @@ async function start() {
   const previous = button('Previous', () => safe(async () => { state.offset = Math.max(0, state.offset - state.limit); await load(); }), footer);
   const next = button('Next', () => safe(async () => { state.offset += state.limit; await load(); }), footer);
   const filterInfo = element('div', '', 'ms-filter-info'); root.append(filterInfo);
+
+  function setBusy(value: boolean) {
+    busy = value;
+    toolbar.querySelectorAll('button').forEach(button => { button.disabled = value; });
+    saveButton.disabled = value || !buffer.dirty;
+    search.disabled = value;
+    formulaInput.disabled = value || !active || !editable.has(active.getField());
+    previous.disabled = value || state.offset === 0;
+    next.disabled = value || !hasNext;
+  }
 
   function params(view: State) {
     const query = new URLSearchParams();
@@ -117,6 +128,7 @@ async function start() {
     return {dialog, body, actions};
   }
   async function safe(action: () => Promise<any>) {
+    if (busy) return;
     try {
       if (buffer.dirty) {
         const decision = await new Promise<string>(resolve => {
@@ -126,7 +138,7 @@ async function start() {
           button('Discard', () => { resolve('discard'); dialog.close(); }, actions);
           dialog.addEventListener('close', () => resolve('keep'), {once:true});
         });
-        if (decision === 'keep') return;
+        if (decision === 'keep' || busy) return;
         if (decision === 'save') { await save(); if (buffer.dirty) return; }
         else { buffer.clear(); render(); }
       }
@@ -134,7 +146,7 @@ async function start() {
     } catch (error) { showError(error); }
   }
   async function load() {
-    busy = true; saveButton.disabled = true; status.textContent = t('Loading');
+    setBusy(true); status.textContent = t('Loading');
     try {
       const data = await request('rows/?' + params(state));
       snapshot = data.snapshot; state = data.state; loadedState = structuredClone(state);
@@ -191,7 +203,7 @@ async function start() {
       previous.disabled = state.offset === 0; next.disabled = !hasNext;
       filterInfo.textContent = `${state.sort.map(item => `${meta.get(item.field)?.label ?? 'PK'} ${item.dir === 'asc' ? '↑' : '↓'}`).join(' · ')}${Object.keys(state.filter).length ? ' · ' + JSON.stringify(state.filter) : ''}`;
       status.className = ''; status.textContent = t('Ready');
-    } finally { busy = false; saveButton.disabled = !buffer.dirty; }
+    } finally { setBusy(false); }
   }
   function textNode(value: any) { return element('span', value === null || value === undefined ? '' : String(value)); }
   function tableData() { return buffer.rows.map(row => ({__modelsheet_pk:row.pk, __modelsheet_original:row.values, ...row.values, ...buffer.changes[row.pk], ...Object.fromEntries(computed.map(field => [field.name,renderVersion]))})); }
@@ -216,9 +228,10 @@ async function start() {
     const pk = active.getRow().getData().__modelsheet_pk, name = active.getField();
     const virtual = computed.find(field => field.name === name);
     address.textContent = virtual ? `ƒx · ${virtual.label}` : `${columnName(state.columns!.indexOf(name))}${buffer.rows.findIndex(row => row.pk === pk) + 1}`;
-    formulaInput.value = virtual?.formula ?? String(buffer.raw(pk, name) ?? ''); formulaInput.disabled = !editable.has(name);
+    formulaInput.value = virtual?.formula ?? String(buffer.raw(pk, name) ?? ''); formulaInput.disabled = busy || !editable.has(name);
   }
   function edit(pk: string, field: string, value: any) {
+    if (busy) return;
     buffer.apply([{pk, field, value}]); errors.delete(`${pk}:${field}`); conflicts.delete(`${pk}:${field}`); savedCells.delete(`${pk}:${field}`); savingKey = null; render();
   }
   function render() {
@@ -233,7 +246,7 @@ async function start() {
   }
   async function save() {
     if (!buffer.dirty || busy) return;
-    busy = true; saveButton.disabled = true; status.textContent = t('Saving');
+    setBusy(true); status.textContent = t('Saving');
     const body = {snapshot, view_state:loadedState, changes:buffer.payload()};
     table?.redraw(true);
     const serialized = JSON.stringify(body);
@@ -244,7 +257,7 @@ async function start() {
       for (const change of body.changes) for (const field of Object.keys(change.values)) savedCells.add(`${change.pk}:${field}`);
       table?.redraw(true);
     } catch (error) { showError(error); throw error; }
-    finally { busy = false; saveButton.disabled = !buffer.dirty; }
+    finally { setBusy(false); }
   }
   function selected(): any[] { return table?.getRanges()?.flatMap((range: any) => range.getCells().flat())?.filter((cell: any) => meta.has(cell.getField())) ?? []; }
   function selectionBounds() {
@@ -255,6 +268,7 @@ async function start() {
     return {top:Math.min(...points.map(p => p[0])), bottom:Math.max(...points.map(p => p[0])), left:Math.min(...points.map(p => p[1])), right:Math.max(...points.map(p => p[1]))};
   }
   function fillDown() {
+    if (busy) return;
     const bounds = selectionBounds(), edits = [];
     for (let row = bounds.top + 1; row <= bounds.bottom; row++) for (let col = bounds.left; col <= bounds.right; col++) {
       const raw = buffer.transferValue(buffer.rows[bounds.top].pk, state.columns![col]);
@@ -265,6 +279,7 @@ async function start() {
   root.addEventListener('keydown', event => {
     const target = event.target as HTMLElement;
     if (target.matches('input, textarea, select') || target.closest('dialog')) return;
+    if (busy) { event.preventDefault(); event.stopImmediatePropagation(); return; }
     if (event.ctrlKey || event.metaKey) {
       if (['z','y','d','s'].includes(event.key.toLowerCase())) event.stopImmediatePropagation();
       if (event.key.toLowerCase() === 'z') { event.preventDefault(); event.shiftKey ? buffer.redo() : buffer.undo(); render(); }
@@ -279,6 +294,7 @@ async function start() {
   root.addEventListener('copy', event => copyRange(event, false));
   root.addEventListener('cut', event => copyRange(event, true));
   function copyRange(event: ClipboardEvent, cut: boolean) {
+    if (busy && cut) { event.preventDefault(); return; }
     if ((event.target as HTMLElement).matches('input,textarea') || (event.target as HTMLElement).closest('dialog')) return;
     try {
       const bounds = selectionBounds(), values = [];
@@ -294,6 +310,7 @@ async function start() {
     } catch (error) { showError(error); }
   }
   root.addEventListener('paste', event => {
+    if (busy) { event.preventDefault(); return; }
     if ((event.target as HTMLElement).matches('input,textarea') || (event.target as HTMLElement).closest('dialog')) return;
     event.preventDefault();
     try {
@@ -321,12 +338,12 @@ async function start() {
     const node = element('select'); for (const [key, label] of items) { const option = element('option', label); option.value = key; node.append(option); }
     node.value = value; return node;
   }
-  function filterGroup(value: any = {}): {node: HTMLElement; read: () => any} {
+  function filterGroup(value: any = {}, onChange: () => void = () => {}): {node: HTMLElement; read: () => any} {
     const node = element('fieldset', '', 'ms-filter-group');
     const mode = select([['and','AND'],['or','OR']], value.or ? 'or' : 'and'); node.append(mode);
     const children: {node: HTMLElement; read: () => any}[] = [];
     function attach(child: {node: HTMLElement; read: () => any}) {
-      children.push(child); node.append(child.node); button('Remove', () => { children.splice(children.indexOf(child),1); child.node.remove(); }, child.node);
+      children.push(child); node.append(child.node); button('Remove', () => { children.splice(children.indexOf(child),1); child.node.remove(); onChange(); }, child.node);
     }
     const condition = (item: any = {}) => {
       const row = element('div', '', 'ms-condition');
@@ -337,9 +354,9 @@ async function start() {
       return {node:row, read:() => ({field:field.value, op:op.value,
         value:op.value === 'isnull' ? ['true','1'].includes(input.value.toLowerCase()) : ['in','not_in'].includes(op.value) ? input.value.split(',').map(x => x.trim()) : input.value})};
     };
-    button('Add condition', () => attach(condition()), node);
-    button('Add group', () => attach(filterGroup()), node);
-    for (const item of value.and ?? value.or ?? (Object.keys(value).length ? [value] : [])) attach(item.and || item.or ? filterGroup(item) : condition(item));
+    button('Add condition', () => { attach(condition()); onChange(); }, node);
+    button('Add group', () => { attach(filterGroup({}, onChange)); onChange(); }, node);
+    for (const item of value.and ?? value.or ?? (Object.keys(value).length ? [value] : [])) attach(item.and || item.or ? filterGroup(item, onChange) : condition(item));
     return {node, read:() => children.length ? {[mode.value]: children.map(child => child.read())} : {}};
   }
   function filterDialog() {
@@ -385,32 +402,53 @@ async function start() {
   async function bulkDialog() {
     const {dialog, body, actions} = modal('Bulk change');
     const scope = select([['all',t('All filtered rows')],['selected',t('Selected rows on this page')]], 'all'); body.append(scope);
-    const builder = filterGroup(state.filter); body.append(builder.node);
+    const builder = filterGroup(state.filter, invalidatePreview); body.append(builder.node);
     const assignmentBox = element('div'); body.append(assignmentBox);
     const assignments: {field: HTMLSelectElement; input: HTMLInputElement; node: HTMLElement}[] = [];
     function addAssignment() {
       const node = element('div', '', 'ms-condition'), field = select(fields.filter(f => f.editable).map(f => [f.name,f.label]), fields.find(f => f.editable)?.name ?? '');
       const input = element('input'); input.placeholder = t('Value or formula'); node.append(field, input); assignmentBox.append(node);
-      const item = {field,input,node}; assignments.push(item); button('Remove', () => { assignments.splice(assignments.indexOf(item),1); node.remove(); }, node);
+      const item = {field,input,node}; assignments.push(item); button('Remove', () => { assignments.splice(assignments.indexOf(item),1); node.remove(); invalidatePreview(); }, node);
     }
-    addAssignment(); button('Add assignment', addAssignment, body);
+    addAssignment(); button('Add assignment', () => { addAssignment(); invalidatePreview(); }, body);
     const output = element('div', '', 'ms-report'); body.append(output);
-    let operation: any = null, timer: ReturnType<typeof setTimeout> | null = null;
+    let operation: any = null, timer: ReturnType<typeof setTimeout> | null = null, revision = 0;
     const confirmButton = button('Confirm', async () => {
       if (!operation || !window.confirm(`${t('Confirm')}: ${operation.total} records?`)) return;
-      try { operation = await request('bulk/run/', {operation:operation.id}); display(); } catch (error: any) { output.textContent = `${error.details?.code}: ${error.message}`; }
+      try { await updateOperation('bulk/run/', {operation:operation.id}); } catch (error: any) { output.textContent = `${error.details?.code}: ${error.message}`; }
     }, actions, 'ms-primary'); confirmButton.disabled = true;
     const previewButton = button('Preview', async () => {
+      invalidatePreview();
+      const requestedRevision = revision;
+      previewButton.disabled = true;
       try {
         const values: Record<string, string> = {};
         for (const item of assignments) { if (Object.hasOwn(values,item.field.value)) throw new Error('Duplicate assignment'); values[item.field.value] = item.input.value; }
         const selection = scope.value === 'selected' ? [...new Set(selected().map(cell => cell.getRow().getData().__modelsheet_pk))] : null;
-        operation = await request('bulk/preview/', {state:{...state, filter:builder.read()}, assignments:values, selection, snapshot,
-          idempotency_key:crypto.randomUUID()}); display();
-      } catch (error: any) { output.textContent = `${error.details?.code ?? 'Error'}: ${error.message}`; }
+        const result = await request('bulk/preview/', {state:{...state, filter:builder.read()}, assignments:values, selection, snapshot,
+          idempotency_key:crypto.randomUUID()});
+        if (requestedRevision !== revision || !dialog.open) return;
+        operation = result; display();
+      } catch (error: any) {
+        if (requestedRevision === revision && dialog.open) output.textContent = `${error.details?.code ?? 'Error'}: ${error.message}`;
+      } finally {
+        if (requestedRevision === revision && dialog.open) previewButton.disabled = ['preparing','queued','running'].includes(operation?.status);
+      }
     }, actions);
-    const cancelButton = button('Cancel', async () => { if (operation) { operation = await request(`operations/${operation.id}/cancel/`, {}); display(); } }, actions);
-    const resumeButton = button('Resume', async () => { if (operation) { operation = await request(`operations/${operation.id}/resume/`, {}); display(); } }, actions);
+    const cancelButton = button('Cancel', async () => { if (operation) await updateOperation(`operations/${operation.id}/cancel/`, {}); }, actions);
+    const resumeButton = button('Resume', async () => { if (operation) await updateOperation(`operations/${operation.id}/resume/`, {}); }, actions);
+    async function updateOperation(route: string, body: any) {
+      const requestedRevision = ++revision;
+      if (timer) clearTimeout(timer);
+      try {
+        const result = await request(route, body);
+        if (requestedRevision !== revision || !dialog.open) return;
+        operation = result; display();
+      } catch (error) {
+        if (requestedRevision !== revision || !dialog.open) return;
+        display(); throw error;
+      }
+    }
     function display() {
       output.replaceChildren(); if (operation) operationReport(output,operation);
       confirmButton.disabled = !operation || operation.status !== 'preview' || operation.errors > 0;
@@ -419,12 +457,20 @@ async function start() {
       const expiredWorker = operation && ['running','preparing','queued'].includes(operation.status) && operation.lease_until && new Date(operation.lease_until).getTime() < Date.now();
       resumeButton.disabled = !operation || (!['cancelled','dispatch_failed','failed'].includes(operation.status) && !expiredWorker);
       if (timer) clearTimeout(timer);
+      const polledRevision = revision, operationId = operation?.id;
       if (['preparing','queued','running'].includes(operation?.status)) timer = setTimeout(async () => {
         if (!dialog.open) return;
-        try { operation = await request(`operations/${operation.id}/`); display(); } catch (error: any) { output.textContent = error.message; }
+        try {
+          const result = await request(`operations/${operationId}/`);
+          if (polledRevision !== revision || !dialog.open) return;
+          operation = result; display();
+        } catch (error: any) { if (polledRevision === revision && dialog.open) output.textContent = error.message; }
       }, 1500);
     }
-    body.addEventListener('input', () => { operation = null; confirmButton.disabled = true; output.textContent = ''; });
+    function invalidatePreview() {
+      revision++; operation = null; display();
+    }
+    body.addEventListener('input', invalidatePreview);
     dialog.addEventListener('close', () => { if (timer) clearTimeout(timer); if (operation?.changed && !buffer.dirty) void load().catch(showError); });
     display();
   }

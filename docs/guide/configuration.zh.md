@@ -2,9 +2,10 @@
 
 `settings.MODELSHEET` 与默认值合并，`formula` 内部键也会合并。
 
+无需额外设置：通过 `ModelSheetAdmin` 注册即可启用表格。在 Admin 中设置 `sheet_enabled = False` 可禁用表格。若指定 `models`，则仅启用列表中的模型，且仍须通过 `ModelSheetAdmin` 注册。
+
 ```python title="settings.py"
 MODELSHEET = {
-    "models": ["shop.Product", "shop.Order"],
     "page_size": 200,
     "max_page_size": 500,
     "max_save_rows": 500,
@@ -28,7 +29,7 @@ MODELSHEET = {
 
 | 设置 | 默认值 | 用途 |
 | --- | --- | --- |
-| `models` | `[]` | 显式允许的 `app.Model` |
+| `models` | `None` | 可选的 `app.Model` 限制；`[]` 禁用所有表格 |
 | `page_size` / `max_page_size` | `200` / `500` | 默认 / 最大页行数 |
 | `max_save_rows` | `500` | 普通保存的最大行数 |
 | `count_mode` | `"exact"` | `exact` 或 `none`；后者不执行 COUNT |

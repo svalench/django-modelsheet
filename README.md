@@ -3,7 +3,7 @@
 Spreadsheet editing for explicitly registered Django Admin models: cell/range editing,
 local undo/redo, Decimal formulas, server-side filters, and previewed bulk changes.
 
-**0.3.0a2 is an alpha**, available on [PyPI](https://pypi.org/project/django-modelsheet/0.3.0a2/).
+**0.3.0 is prepared for stable release; publication is pending.**
 The repository includes a working demo, compiled assets, tests, and a compatibility CI matrix.
 
 **[Documentation website →](https://svalench.github.io/django-modelsheet/)** —
@@ -11,16 +11,15 @@ installation, examples, formulas, bulk operations and extension APIs in English,
 
 ## Quickstart
 
-Install the current alpha (or `pip install .` from this repository):
+Install this prepared release from the repository:
 
 ```sh
-pip install django-modelsheet==0.3.0a2
+pip install .
 ```
 
 ```python
 # settings.py
 INSTALLED_APPS += ["modelsheet"]
-MODELSHEET = {"models": ["shop.Product"], "page_size": 200}
 
 # SQLite only: required for safe writes; PostgreSQL/MySQL use row locks.
 DATABASES["default"].setdefault("OPTIONS", {})["transaction_mode"] = "IMMEDIATE"
@@ -47,10 +46,22 @@ python manage.py collectstatic --noinput
 python manage.py modelsheet_roles  # optional: creates groups, assigns no users
 ```
 
+Registering `ModelSheetAdmin` enables the sheet; no model list in settings is needed.
+
 Assign a group through Django Admin and mark the account as staff. Superusers can
 use configured sheets immediately. Open **Spreadsheet** from the model list, or
 visit `/admin/shop/product/sheet/`. No frontend build, CDN or extra URL include is
 required in the consuming project. Admin's existing sessions and CSRF protection apply.
+
+## Upgrading to 0.3.0
+
+Back up the database and pause writes/background workers. Install the new package,
+run `python manage.py migrate` and `python manage.py collectstatic --noinput`, then
+restart the application/workers and reload browser tabs. Migration `0002` preserves
+history and operation items, but expires legacy unconfirmed previews: build a new
+preview before confirming. Already confirmed runs retain their resume behavior.
+New preview deadlines start when preparation completes and cannot be extended by
+cancel/resume or settings changes. After publication, pin `django-modelsheet==0.3.0`.
 
 ## Using the sheet
 
@@ -72,7 +83,6 @@ Prefix text beginning with `=` with an apostrophe, for example `'=SUM(A1:A2)`.
 
 ```python
 MODELSHEET = {
-    "models": ["shop.Product"],
     "page_size": 200,
     "max_page_size": 500,
     "max_save_rows": 500,

@@ -2,22 +2,23 @@
 
 Connect an existing `shop.Product` model: edit price and stock, keep the name read-only, and compute inventory value.
 
-## 1. Install the alpha
+## 1. Install 0.3.0
+
+0.3.0 is prepared but not yet published. Install from this checkout with `python -m pip install .`. After publication:
 
 ```bash
-python -m pip install django-modelsheet==0.3.0a2
+python -m pip install django-modelsheet==0.3.0
 ```
 
 The package includes compiled JavaScript/CSS. Installing it requires no Node.js, npm or CDN. To try without an existing project, use the [demo](demo.md).
 
-## 2. Enable the model
+## 2. Add the app
 
 ```python title="settings.py"
 INSTALLED_APPS += ["modelsheet"]
-MODELSHEET = {"models": ["shop.Product"], "page_size": 200}
 ```
 
-Both the allowlist and `ModelSheetAdmin` registration are required.
+Register the model with `ModelSheetAdmin` as shown below. No model list in settings is required.
 
 === "SQLite"
 

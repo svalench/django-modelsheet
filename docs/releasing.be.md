@@ -1,35 +1,51 @@
-# Публікацыя пакета
+# Працэдура выпуску
 
-## PyPI Trusted Publishing
+Версія **0.3.0** падрыхтавана лакальна, але яшчэ не апублікавана. Да дазволу на выпуск
+не стварайце тэг, GitHub Release і не ўключайце параметр публікацыі.
 
-Workflow публікацыі — `.github/workflows/workflow.yml`; `ci.yml` толькі правярае і не публікуе пакет.
+## Лакальная праверка
 
-Для першай публікацыі дадайце pending publisher у [PyPI Publishing](https://pypi.org/manage/account/publishing/):
+1. Захавайце ўсе змены. Узгадніце версіі ў `pyproject.toml`, `modelsheet/__init__.py`,
+   `frontend/package.json` і двух каранёвых запісах `frontend/package-lock.json`.
+   Выканайце `python scripts/check_release.py --stable --tag v0.3.0`.
+2. Выканайце `python manage.py check`, `python manage.py makemigrations --check --dry-run`,
+   `python -m ruff check .` і `python -m pytest -q`.
+3. У `frontend` выканайце `npm ci`, `npm test`, `npm run build`, `npm run build:demo`,
+   `npx playwright install chromium` і `npm run test:e2e`. Уключыце абноўленыя рэсурсы ў каміт.
+4. Усталюйце `requirements-docs.txt`, выканайце `python scripts/check_docs_locales.py`,
+   `mkdocs build --strict`, затым `npm run test:demo` у `frontend`.
+5. Збярыце пакет у пусты каталог: `python -m build --outdir /tmp/modelsheet-030-dist`.
+   Праверце `python -m twine check /tmp/modelsheet-030-dist/*`.
+6. Выканайце `python scripts/package_smoke.py --wheel /tmp/modelsheet-030-dist/django_modelsheet-0.3.0-py3-none-any.whl`
+   і паўтарыце з `--upgrade-from 0.3.0a2`. Можна перадаць шлях да старога wheel.
+   Праверка працуе па-за рэпазіторыем: міграцыі, статыка, захаванне гісторыі, элементаў і здымкаў.
+   Віртуальнае асяроддзе выкарыстоўвае сістэмныя залежнасці, а не правярае іх новую загрузку.
 
-| Поле | Значэнне |
-| --- | --- |
-| Назва праекта | `django-modelsheet` |
-| GitHub owner | `svalench` |
-| Repository | `django-modelsheet` |
-| Імя файла workflow | `workflow.yml` |
-| Environment | `pypi` |
+Захавайце `0001` і дадайце `0002_operation_preview_expires_at`. Перад абнаўленнем зрабіце
+рэзервовую копію БД і прыпыніце запіс ды фонавых выканаўцаў. Усталюйце пакет, выканайце
+міграцыі і collectstatic, перазапусціце праграму і перазагрузіце ўкладкі. Старыя непацверджаныя
+планы патрабуюць новага прагляду; пацверджаныя аперацыі можна працягнуць.
+Гл. [нататкі аб абнаўленні](guide/releases.md) і [вынікі праверак](validation.md).
 
-Для існага праекта дадайце выдаўца ў яго Publishing-наладах. Pending publisher не рэзервуе назву. API token і GitHub secret не патрэбныя: заданне выкарыстоўвае OIDC, `id-token: write` і асяроддзе `pypi`.
+## CI і публікацыя
 
-Пасля захавання ў Actions выберыце **Publish to PyPI → Run workflow → main**. Без `publish` адбываецца толькі праверка зборкі; з ім — загрузка цяперашняй версіі. Спачатку збіраюцца frontend і wheel/sdist, выконваюцца серверныя, модульныя, браўзерныя праверкі і тэст усталявання; потым асобнае заданне загружае файлы.
+Паўторна выкарыстальны `ci.yml` правярае ўсе 16 спалучэнняў Python/Django/БД,
+тэсты frontend і браўзера, wheel/sdist, чыстую ўстаноўку і абнаўленне з 0.3.0a2.
+Ён выклікае `docs-checks.yml`: лакалі, строгая зборка дакументацыі, актуальнасць
+рэсурсаў і тэсты пляцоўкі. Гэтыя працэсы нічога не публікуюць.
 
-Альтэрнатыва — GitHub Release з tag версіі, у тым ліку prerelease. Tag мусіць супадаць з `pyproject.toml`. Звычайны push не публікуе, ручная загрузка не з main забароненая. Загружаныя файлы версіі ў PyPI нельга замяніць: наступны выпуск патрабуе новай версіі.
+`workflow.yml` правярае стабільныя версіі і тэг, затым запускае поўны CI для таго ж
+каміта. Публікацыя залежыць ад усіх праверак і выкарыстоўвае толькі правераны артэфакт
+`pypi-distributions`. Зялёны CI для старога каміта не пацвярджае гатоўнасць новага.
 
-## Праверкі суправаджальніка
+Пасля дазволу запусціце **Publish to PyPI** на `main`: выключаны `publish` азначае
+толькі праверку; уключаны — загрузку. Публікацыя GitHub Release `v0.3.0` запускае тыя ж
+праверкі і загрузку. Звычайны push не публікуе пакет. Версію ў PyPI нельга замяніць.
 
-1. Выканайце поўную матрыцу CI, браўзерныя, пакетныя і міграцыйныя праверкі.
-2. Праверце ліцэнзіі залежнасцей і даступнасць назвы.
-3. Абнавіце версію ў `pyproject.toml`, `modelsheet/__init__.py`, `frontend/package.json`, lockfile, changelog і нататках сумяшчальнасці.
-4. Выканайце `npm ci && npm run build` у frontend, затым `python -m build` і `python -m twine check dist/*`; праверце статыку, шаблоны, пераклады і міграцыі.
-5. Усталюйце wheel у чыстае асяроддзе, выканайце migrate/collectstatic і абнаўленне з папярэдняй версіі. Захоўвайце старыя міграцыі.
-6. Пры дазволе на выпуск і настроеных уліковых даных загрузіце ў TestPyPI праз `python -m twine upload --repository testpypi dist/*`. Праверце ўсталяванне; залежнасці бярыце з асноўнага індэкса.
-7. Пасля праверкі стварыце tag і апублікуйце PyPI праз Trusted Publishing або ўліковыя даныя суправаджальніка.
+## Trusted Publishing
 
-Лакальныя каманды зборкі нічога не загружаюць, не адпраўляюць у Git і не публікуюць. `python scripts/check_pypi_name.py` з адказам 404 паказвае даступнасць у той момант, а не рэзерваванне назвы.
-
-[Афіцыйная інструкцыя PyPI](https://docs.pypi.org/trusted-publishers/adding-a-publisher/).
+Для праекта `django-modelsheet` наладзьце выдаўца: рэпазіторый
+`svalench/django-modelsheet`, файл `workflow.yml`, асяроддзе `pypi`.
+Выкарыстоўваецца OIDC з `id-token: write` толькі ў задачы публікацыі; токен PyPI не патрэбны.
+[Інструкцыя PyPI](https://docs.pypi.org/trusted-publishers/adding-a-publisher/).
+Лакальныя праверкі не выконваюць загрузку, стварэнне тэгаў або push.

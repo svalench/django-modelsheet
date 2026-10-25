@@ -2,9 +2,10 @@
 
 `settings.MODELSHEET` merges with defaults, including nested keys in `formula`.
 
+Settings are optional: registered `ModelSheetAdmin` classes enable sheets by default. Set `sheet_enabled = False` on an Admin to disable its sheet. If `models` is supplied, only listed models are enabled; they still require `ModelSheetAdmin` registration.
+
 ```python title="settings.py"
 MODELSHEET = {
-    "models": ["shop.Product", "shop.Order"],
     "page_size": 200,
     "max_page_size": 500,
     "max_save_rows": 500,
@@ -28,7 +29,7 @@ MODELSHEET = {
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `models` | `[]` | Explicit `app.Model` allowlist |
+| `models` | `None` | Optional `app.Model` restriction; `[]` disables all sheets |
 | `page_size` / `max_page_size` | `200` / `500` | Default/maximum page rows |
 | `max_save_rows` | `500` | Maximum rows per ordinary save |
 | `count_mode` | `"exact"` | `exact` or `none`; none omits COUNT |
