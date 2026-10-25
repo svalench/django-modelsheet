@@ -4,7 +4,7 @@
 
 ## 1. 安装 0.3.0
 
-0.3.0 已准备好，但尚未发布。当前可通过 `python -m pip install .` 安装本地代码。发布后：
+从 PyPI 安装稳定版本：
 
 ```bash
 python -m pip install django-modelsheet==0.3.0

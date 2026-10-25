@@ -1,7 +1,7 @@
 # Release procedure
 
-Version **0.3.0** is prepared locally; it has not been published. Do not create a tag,
-publish a GitHub Release or enable the publishing input until release approval.
+This procedure covers stable releases, starting with **0.3.0**. Create a tag, publish
+a GitHub Release or enable the publishing input only after release approval.
 
 ## Local validation
 

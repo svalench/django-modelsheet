@@ -1,10 +1,12 @@
 # 版本与限制
 
-## 0.3.0 · 已准备，待发布
+## 0.3.0 · 2026 年 10 月 25 日
 
 修复编辑缓冲区中的特殊字符串主键问题，并固定预览失效时间。包含检查权限后缓存的批量聚合、过期响应保护和自动发现 `ModelSheetAdmin`。发布必须通过完整 CI 矩阵、浏览器和安装包测试，以及严格的文档检查。
 
-0.3.0 已准备好，但尚未发布。当前可通过 `python -m pip install .` 安装本地代码。发布后：
+从 PyPI 安装稳定版本：
+
+[GitHub Release](https://github.com/svalench/django-modelsheet/releases/tag/v0.3.0) · [PyPI](https://pypi.org/project/django-modelsheet/0.3.0/)
 
 ```bash
 python -m pip install --upgrade django-modelsheet==0.3.0

@@ -1,10 +1,12 @@
 # Release and limitations
 
-## 0.3.0 · prepared, publication pending
+## 0.3.0 · 25 October 2026
 
 Fixes special string primary keys in the edit buffer and immutable preview expiry. Includes permission-safe cached bulk aggregates, stale-response guards and automatic `ModelSheetAdmin` discovery. Publishing requires the complete CI matrix, browser/package checks and strict documentation checks.
 
-0.3.0 is prepared but not yet published. Install from this checkout with `python -m pip install .`. After publication:
+Install the stable release from PyPI:
+
+[GitHub Release](https://github.com/svalench/django-modelsheet/releases/tag/v0.3.0) · [PyPI](https://pypi.org/project/django-modelsheet/0.3.0/)
 
 ```bash
 python -m pip install --upgrade django-modelsheet==0.3.0

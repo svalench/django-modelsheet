@@ -3,7 +3,7 @@
 Spreadsheet editing for explicitly registered Django Admin models: cell/range editing,
 local undo/redo, Decimal formulas, server-side filters, and previewed bulk changes.
 
-**0.3.0 is prepared for stable release; publication is pending.**
+**0.3.0 is the first stable release.** [Release notes](https://github.com/svalench/django-modelsheet/releases/tag/v0.3.0) · [PyPI](https://pypi.org/project/django-modelsheet/0.3.0/)
 The repository includes a working demo, compiled assets, tests, and a compatibility CI matrix.
 
 **[Documentation website →](https://svalench.github.io/django-modelsheet/)** —
@@ -11,10 +11,10 @@ installation, examples, formulas, bulk operations and extension APIs in English,
 
 ## Quickstart
 
-Install this prepared release from the repository:
+Install the stable release:
 
 ```sh
-pip install .
+pip install django-modelsheet==0.3.0
 ```
 
 ```python
@@ -61,7 +61,7 @@ restart the application/workers and reload browser tabs. Migration `0002` preser
 history and operation items, but expires legacy unconfirmed previews: build a new
 preview before confirming. Already confirmed runs retain their resume behavior.
 New preview deadlines start when preparation completes and cannot be extended by
-cancel/resume or settings changes. After publication, pin `django-modelsheet==0.3.0`.
+cancel/resume or settings changes. Pin `django-modelsheet==0.3.0`.
 
 ## Using the sheet
 

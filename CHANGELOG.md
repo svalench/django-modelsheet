@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 — prepared, publication pending
+## 0.3.0 — 2026-10-25
 
 - Preserve edits, undo/redo and save payloads for string primary keys such as `__proto__` and `constructor`.
 - Store an immutable preview deadline; cancel/resume cannot renew an expired plan or rebuild an empty plan.

@@ -4,7 +4,7 @@ Connect an existing `shop.Product` model: edit price and stock, keep the name re
 
 ## 1. Install 0.3.0
 
-0.3.0 is prepared but not yet published. Install from this checkout with `python -m pip install .`. After publication:
+Install the stable release from PyPI:
 
 ```bash
 python -m pip install django-modelsheet==0.3.0
