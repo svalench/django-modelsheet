@@ -54,6 +54,7 @@ jobs:
       - run: pip install -e '.[test,postgres,mysql]' 'Django~=${{ matrix.django }}.0'
       - run: python manage.py check && python manage.py makemigrations --check --dry-run
       - run: python -m ruff check .
+      - run: python -m mypy
       - run: python -m pytest -q
 
   browser-and-package:

@@ -4,16 +4,15 @@ import datetime as dt
 import uuid
 from datetime import timedelta
 
-from django.db import IntegrityError, transaction
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.utils import timezone
 from django.utils.crypto import constant_time_compare
-
 from django.utils.translation import gettext_lazy as _
 
-from .conf import component, config
 from .adapters import serialize
+from .conf import component, config
 from .errors import SheetError
 from .formula import FormulaError, references
 from .formula.engine import QueryAggregates
@@ -68,7 +67,7 @@ def preview(request, admin, payload):
                         field=name,
                     )
             except FormulaError as exc:
-                raise SheetError(exc.code, str(exc), field=name)
+                raise SheetError(exc.code, str(exc), field=name) from exc
         elif isinstance(expression, (dict, list)):
             raise SheetError(
                 "invalid_assignments", _("Assignments must be scalar values."), field=name
@@ -134,7 +133,7 @@ def preview(request, admin, payload):
             "idempotency_conflict",
             _("Concurrent operation submission. Retry with the same key."),
             status=409,
-        )
+        ) from None
     if background:
         enqueue(op, "preview")
     return report(request, admin, op, own=True)
@@ -234,7 +233,7 @@ def enqueue(op, phase):
             _("Queue submission failed; operation can be resumed."),
             status=503,
             details={"operation": str(op.pk)},
-        )
+        ) from None
 
 
 def require_fresh_preview(op):

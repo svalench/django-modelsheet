@@ -3,7 +3,6 @@ from copy import copy
 
 from django.core.exceptions import ValidationError
 from django.db.models import Q
-
 from django.utils.translation import gettext_lazy as _
 
 from .conf import component, config
@@ -74,7 +73,7 @@ def condition(tree, model, fields):
             result = Q(**{f"{name}__{OPERATORS[op]}": value})
             return ~result if op in ("ne", "not_in") else result
         except (ValidationError, ValueError, TypeError, ArithmeticError):
-            raise SheetError("invalid_filter", _("Invalid filter value."), field=name)
+            raise SheetError("invalid_filter", _("Invalid filter value."), field=name) from None
 
     return walk(tree)
 
@@ -84,7 +83,7 @@ def parse_offset(params):
     try:
         offset = max(0, int(params.get("offset", 0)))
     except (TypeError, ValueError):
-        raise SheetError("invalid_offset", _("Offset must be an integer."))
+        raise SheetError("invalid_offset", _("Offset must be an integer.")) from None
     if offset > config()["max_offset"]:
         raise SheetError(
             "offset_limit", _("Offset is too large; narrow the view with filters instead.")
@@ -110,7 +109,7 @@ def parse_state(params):
             "columns": json.loads(columns) if isinstance(columns, str) else columns,
         }
     except (TypeError, ValueError):
-        raise SheetError("invalid_state", _("Invalid view state."))
+        raise SheetError("invalid_state", _("Invalid view state.")) from None
 
 
 def queryset(request, admin, fields, state):

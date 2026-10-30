@@ -1,5 +1,4 @@
 from django.core.exceptions import FieldDoesNotExist
-
 from django.utils.translation import gettext_lazy as _
 
 from .conf import component

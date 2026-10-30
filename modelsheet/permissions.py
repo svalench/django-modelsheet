@@ -1,6 +1,5 @@
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
-
 from django.utils.translation import gettext_lazy as _
 
 from .conf import config
@@ -64,6 +63,7 @@ def require_access(request, admin, *, change=False, action=None):
 
 def create_permissions(sender, using="default", **kwargs):
     from django.contrib.admin import sites
+
     from .admin import ModelSheetAdmin
     from .models import Operation
 

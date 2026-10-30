@@ -4,12 +4,11 @@ import re
 from contextlib import contextmanager
 from datetime import timedelta
 
-from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connections, transaction
 from django.utils import timezone
 from django.utils.crypto import constant_time_compare, salted_hmac
-
 from django.utils.translation import gettext_lazy as _
 
 from .adapters import serialize
@@ -184,7 +183,9 @@ def get_snapshot(request, admin, snapshot_id):
             site_name=admin.admin_site.name,
         )
     except (ViewSnapshot.DoesNotExist, ValidationError, ValueError):
-        raise SheetError("invalid_snapshot", _("View snapshot is unavailable."), status=409)
+        raise SheetError(
+            "invalid_snapshot", _("View snapshot is unavailable."), status=409
+        ) from None
     if snapshot.created_at < timezone.now() - timedelta(seconds=config()["snapshot_ttl_seconds"]):
         raise SheetError("expired_snapshot", _("Reload the sheet before saving."), status=409)
     return snapshot
@@ -264,7 +265,9 @@ def validate_values(obj, values, request, fields):
     except ValidationError as exc:
         errors = getattr(exc, "message_dict", {"__all__": exc.messages})
         visible = {key: messages for key, messages in errors.items() if key in fields}
-        raise SheetError("validation", _("Row validation failed."), pk=str(obj.pk), details=visible)
+        raise SheetError(
+            "validation", _("Row validation failed."), pk=str(obj.pk), details=visible
+        ) from exc
 
 
 def save_object(obj, names, request):
@@ -277,9 +280,11 @@ def save_object(obj, names, request):
             _("A database constraint prevented saving."),
             pk=str(obj.pk),
             status=409,
-        )
+        ) from None
     except ValidationError:
-        raise SheetError("validation", _("The model save hook rejected this row."), pk=str(obj.pk))
+        raise SheetError(
+            "validation", _("The model save hook rejected this row."), pk=str(obj.pk)
+        ) from None
 
 
 def cell_coordinates(address):
@@ -400,7 +405,7 @@ def save(request, admin, payload):
             try:
                 evaluated[pk][name] = calculation.value(pk, name)
             except FormulaError as exc:
-                raise SheetError(exc.code, str(exc), pk=pk, field=name)
+                raise SheetError(exc.code, str(exc), pk=pk, field=name) from exc
     try:
         with write_transaction():
             # Unique keys are also serialized by the user row to handle concurrent first submissions.
@@ -462,7 +467,7 @@ def save(request, admin, payload):
     except IntegrityError:
         raise SheetError(
             "constraint_conflict", _("A database constraint prevented saving."), status=409
-        )
+        ) from None
     return report(request, admin, op, own=True)
 
 
@@ -477,7 +482,7 @@ def get_operation(request, admin, operation_id, *, own=True):
             filters["user"] = request.user
         return scope_history(Operation.objects.all(), request.user).get(**filters)
     except (Operation.DoesNotExist, ValidationError, ValueError):
-        raise SheetError("not_found", _("Operation not found."), status=404)
+        raise SheetError("not_found", _("Operation not found."), status=404) from None
 
 
 def report(request, admin, op, *, own=False, offset=0, include_items=True):

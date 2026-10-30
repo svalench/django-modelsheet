@@ -14,6 +14,9 @@ class ViewSnapshot(models.Model):
     columns = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def __str__(self):
+        return f"{self.model_label} snapshot {self.pk}"
+
 
 class Operation(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -45,6 +48,9 @@ class Operation(models.Model):
         ]
         permissions = [("open", "Can open model sheets")]
 
+    def __str__(self):
+        return f"{self.kind} {self.model_label} {self.pk}"
+
 
 class OperationItem(models.Model):
     operation = models.ForeignKey(Operation, on_delete=models.CASCADE, related_name="items")
@@ -62,3 +68,6 @@ class OperationItem(models.Model):
                 name="modelsheet_operation_row",
             )
         ]
+
+    def __str__(self):
+        return f"{self.operation_id}:{self.pk_value}"

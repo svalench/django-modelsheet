@@ -1,31 +1,30 @@
-from functools import partial
 from copy import copy
+from functools import partial
 from urllib.parse import urlencode
 
 from django.contrib import admin
 from django.contrib.admin.views.main import IncorrectLookupParameters
-from django.db import transaction
-from django.http import JsonResponse, Http404, HttpResponseNotAllowed, QueryDict
 from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.http import Http404, HttpResponseNotAllowed, JsonResponse, QueryDict
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
-from django.views.i18n import JavaScriptCatalog
-
 from django.utils.translation import gettext_lazy as _
+from django.views.i18n import JavaScriptCatalog
 
 from .errors import SheetError
 from .metadata import fields_for
+from .models import Operation
 from .permissions import scope_history
 from .query import parse_state
 from .services import check_model, report
-from .models import Operation
 from .views import endpoint
 
 
 class ModelSheetAdmin(admin.ModelAdmin):
     sheet_fields = ()
     sheet_editable = ()
-    sheet_computed_fields = {}
+    sheet_computed_fields: dict[str, str | dict[str, str]] = {}
     sheet_enabled = True
     list_per_page = 200
     change_list_template = "modelsheet/change_list.html"
@@ -312,11 +311,11 @@ class OperationAdmin(admin.ModelAdmin):
         try:
             op = self.get_queryset(request).get(pk=object_id)
         except (Operation.DoesNotExist, ValueError, ValidationError):
-            raise Http404
+            raise Http404 from None
         try:
             offset = max(0, int(request.GET.get("offset", 0)))
         except ValueError:
-            raise Http404
+            raise Http404 from None
         data = report(request, self.targets(request)[op.model_label], op, offset=offset)
         return TemplateResponse(
             request,

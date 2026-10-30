@@ -3,7 +3,6 @@ import json
 from django.core.exceptions import RequestDataTooBig, ValidationError
 from django.db import OperationalError
 from django.http import JsonResponse
-
 from django.utils.translation import gettext_lazy as _
 
 from . import bulk, services
