@@ -34,6 +34,8 @@ def check_configuration(app_configs, **kwargs):
         ):
             if not isinstance(settings[key], int) or settings[key] < 1:
                 errors.append(Error(f"{key} must be a positive integer", id="modelsheet.E002"))
+        if settings["history_scope"] not in ("all", "own"):
+            errors.append(Error("history_scope must be all or own", id="modelsheet.E009"))
         if settings["count_mode"] not in ("exact", "none"):
             errors.append(Error("count_mode must be exact or none", id="modelsheet.E003"))
         if settings["page_size"] > settings["max_page_size"]:

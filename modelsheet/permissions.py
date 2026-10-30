@@ -1,6 +1,7 @@
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
 
+from .conf import config
 from .errors import SheetError
 
 
@@ -25,6 +26,17 @@ class PermissionPolicy:
 
     def can_edit_object(self, request, admin, obj):
         return admin.has_change_permission(request, obj)
+
+
+def can_view_all_history(user):
+    """Whether ``user`` may see operations of other users (see ``history_scope``)."""
+    if config()["history_scope"] == "all":
+        return True
+    return user.is_superuser or user.has_perm("modelsheet.view_all_history")
+
+
+def scope_history(queryset, user):
+    return queryset if can_view_all_history(user) else queryset.filter(user=user)
 
 
 def require_access(request, admin, *, change=False, action=None):
@@ -52,7 +64,10 @@ def create_permissions(sender, using="default", **kwargs):
     from .models import Operation
 
     content_type = ContentType.objects.db_manager(using).get_for_model(Operation)
-    definitions = {"open": "Can open model sheets"}
+    definitions = {
+        "open": "Can open model sheets",
+        "view_all_history": "Can view model sheet operations of all users",
+    }
     for site in list(sites.all_sites):
         for model, admin in site._registry.items():
             if not isinstance(admin, ModelSheetAdmin):

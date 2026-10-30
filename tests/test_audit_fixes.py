@@ -96,3 +96,31 @@ def test_snapshot_values_of_revoked_fields_are_not_used(api, products):
     snapshot = ViewSnapshot.objects.get(pk=view["snapshot"])
     calculation = SheetCalculation(snapshot, [], {"name": {}, "price": {}})
     assert all("stock" not in row["values"] for row in calculation.rows.values())
+
+
+@pytest.mark.parametrize("scope,visible", [("all", True), ("own", False)])
+def test_history_scope(api, products, settings, scope, visible):
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.models import Permission
+
+    settings.MODELSHEET = {"history_scope": scope}
+    view = loaded(api)
+    op = post(api, "save", save_payload(view, {"price": 12})).json()
+    auditor = get_user_model().objects.create_user(username="auditor", is_staff=True)
+    auditor.user_permissions.add(
+        *Permission.objects.filter(
+            codename__in=["open", "view_product", "history_shop_product"]
+        )
+    )
+    api.force_login(auditor)
+    ids = [o["id"] for o in api.get(BASE + "history/").json()["operations"]]
+    assert (op["id"] in ids) is visible
+    detail = api.get(BASE + f"operations/{op['id']}/")
+    assert detail.status_code == (200 if visible else 404)
+    audit = api.get(f"/admin/modelsheet/operation/{op['id']}/change/")
+    assert audit.status_code == (200 if visible else 404)
+
+    auditor.user_permissions.add(Permission.objects.get(codename="view_all_history"))
+    api.force_login(get_user_model().objects.get(pk=auditor.pk))
+    assert op["id"] in [o["id"] for o in api.get(BASE + "history/").json()["operations"]]
+    assert api.get(BASE + f"operations/{op['id']}/").status_code == 200

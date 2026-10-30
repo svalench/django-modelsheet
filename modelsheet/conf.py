@@ -11,6 +11,9 @@ DEFAULTS = {
     "bulk_background_threshold": 5000,
     "chunk_size": 200,
     "history_retention_days": 365,
+    # "all": anyone with the history permission sees every user's operations (pre-0.4 behaviour);
+    # "own": only own operations unless superuser or modelsheet.view_all_history.
+    "history_scope": "all",
     "snapshot_ttl_seconds": 1800,
     "preview_ttl_seconds": 1800,
     "max_request_bytes": 1_000_000,

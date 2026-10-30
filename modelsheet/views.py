@@ -8,6 +8,7 @@ from . import bulk, services
 from .conf import config
 from .errors import SheetError
 from .models import Operation
+from .permissions import scope_history
 
 
 def endpoint(request, admin, action, operation_id=None):
@@ -48,7 +49,7 @@ def endpoint(request, admin, action, operation_id=None):
         elif action == "history":
             services.check_model(request, admin, action="history")
             offset = max(0, int(request.GET.get("offset", 0)))
-            ops = Operation.objects.filter(
+            ops = scope_history(Operation.objects.all(), request.user).filter(
                 model_label=admin.model._meta.label, site_name=admin.admin_site.name
             ).order_by("-created_at")
             data = {

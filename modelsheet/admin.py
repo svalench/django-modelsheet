@@ -13,6 +13,7 @@ from django.views.i18n import JavaScriptCatalog
 
 from .errors import SheetError
 from .metadata import fields_for
+from .permissions import scope_history
 from .query import parse_state
 from .services import check_model, report
 from .models import Operation
@@ -295,10 +296,8 @@ class OperationAdmin(admin.ModelAdmin):
         return False
 
     def get_queryset(self, request):
-        return (
-            super()
-            .get_queryset(request)
-            .filter(model_label__in=self.targets(request), site_name=self.admin_site.name)
+        return scope_history(super().get_queryset(request), request.user).filter(
+            model_label__in=self.targets(request), site_name=self.admin_site.name
         )
 
     def change_view(self, request, object_id, form_url="", extra_context=None):

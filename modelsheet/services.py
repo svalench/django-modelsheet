@@ -16,7 +16,7 @@ from .errors import SheetError
 from .formula import FormulaError, evaluate, parse, references
 from .metadata import fields_for, require_fields, require_object_editable
 from .models import Operation, OperationItem, ViewSnapshot
-from .permissions import require_access
+from .permissions import require_access, scope_history
 from .query import parse_state, queryset
 from .registry import is_enabled
 
@@ -473,7 +473,7 @@ def get_operation(request, admin, operation_id, *, own=True):
         }
         if own:
             filters["user"] = request.user
-        return Operation.objects.get(**filters)
+        return scope_history(Operation.objects.all(), request.user).get(**filters)
     except (Operation.DoesNotExist, ValidationError, ValueError):
         raise SheetError("not_found", "Operation not found.", status=404)
 
