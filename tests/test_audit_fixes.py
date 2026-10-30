@@ -124,3 +124,67 @@ def test_history_scope(api, products, settings, scope, visible):
     api.force_login(get_user_model().objects.get(pk=auditor.pk))
     assert op["id"] in [o["id"] for o in api.get(BASE + "history/").json()["operations"]]
     assert api.get(BASE + f"operations/{op['id']}/").status_code == 200
+
+
+def test_offset_is_bounded(api, products, settings):
+    settings.MODELSHEET = {"max_offset": 1000}
+    for route in ("rows/", "history/"):
+        response = api.get(BASE + route, {"offset": 1001})
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "offset_limit"
+        bad = api.get(BASE + route, {"offset": "abc"})
+        assert bad.status_code == 400
+    assert api.get(BASE + "rows/", {"offset": 1000}).status_code == 200
+
+
+WEIRD = [None, 1, "x", [], {}, [1], {"a": 1}, True, 1.5]
+
+
+@pytest.mark.parametrize("value", WEIRD)
+def test_malformed_payloads_are_client_errors(api, products, value):
+    view = loaded(api)
+    payloads = {
+        "save": [
+            {"changes": value},
+            {**save_payload(view, {"price": 1}), "idempotency_key": value},
+            {**save_payload(view, {"price": 1}), "snapshot": value},
+            {**save_payload(view, {"price": 1}), "view_state": value},
+            {**save_payload(view, {"price": value}), "idempotency_key": "w"},
+        ],
+        "bulk/preview": [
+            preview_payload(assignments=value),
+            preview_payload(state=value),
+            preview_payload(selection=value),
+            preview_payload(idempotency_key=value),
+            preview_payload(assignments={"price": value}, idempotency_key="w2"),
+        ],
+        "bulk/run": [{"operation": value}],
+    }
+    for route, bodies in payloads.items():
+        for body in bodies:
+            response = post(api, route, body)
+            assert response.status_code < 500, (route, body, response.content)
+    for params in (
+        {"filter": json_dump(value)},
+        {"sort": json_dump(value)},
+        {"columns": json_dump(value)},
+        {"limit": "x"},
+    ):
+        assert api.get(BASE + "rows/", params).status_code < 500, params
+
+
+def json_dump(value):
+    import json
+
+    return json.dumps(value)
+
+
+def test_programming_errors_are_not_reported_as_bad_requests(api, monkeypatch):
+    from modelsheet import services
+
+    def broken(request, admin):
+        raise TypeError("bug")
+
+    monkeypatch.setattr(services, "schema", broken)
+    with pytest.raises(TypeError):
+        api.get(BASE + "schema/")

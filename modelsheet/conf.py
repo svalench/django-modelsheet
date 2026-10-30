@@ -17,6 +17,7 @@ DEFAULTS = {
     "snapshot_ttl_seconds": 1800,
     "preview_ttl_seconds": 1800,
     "max_request_bytes": 1_000_000,
+    "max_offset": 100_000,
     "max_bulk_rows": 100_000,
     "max_filter_depth": 10,
     "max_filter_nodes": 100,

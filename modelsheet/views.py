@@ -9,6 +9,7 @@ from .conf import config
 from .errors import SheetError
 from .models import Operation
 from .permissions import scope_history
+from .query import parse_offset
 
 
 def endpoint(request, admin, action, operation_id=None):
@@ -44,11 +45,11 @@ def endpoint(request, admin, action, operation_id=None):
             services.check_model(request, admin)
             op = services.get_operation(request, admin, operation_id, own=False)
             data = services.report(
-                request, admin, op, own=True, offset=max(0, int(request.GET.get("offset", 0)))
+                request, admin, op, own=True, offset=parse_offset(request.GET)
             )
         elif action == "history":
             services.check_model(request, admin, action="history")
-            offset = max(0, int(request.GET.get("offset", 0)))
+            offset = parse_offset(request.GET)
             ops = scope_history(Operation.objects.all(), request.user).filter(
                 model_label=admin.model._meta.label, site_name=admin.admin_site.name
             ).order_by("-created_at")
@@ -66,9 +67,6 @@ def endpoint(request, admin, action, operation_id=None):
         json.JSONDecodeError,
         UnicodeDecodeError,
         ValidationError,
-        ValueError,
-        TypeError,
-        KeyError,
     ):
         response = JsonResponse(
             {"error": {"code": "invalid_request", "message": "Malformed request."}}, status=400

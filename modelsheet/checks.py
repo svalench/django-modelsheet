@@ -29,6 +29,7 @@ def check_configuration(app_configs, **kwargs):
             "max_operations_per_minute",
             "max_snapshots_per_minute",
             "max_snapshots_per_user",
+            "max_offset",
             "snapshot_ttl_seconds",
             "preview_ttl_seconds",
         ):

@@ -77,7 +77,22 @@ def condition(tree, model, fields):
     return walk(tree)
 
 
+def parse_offset(params):
+    """Parse a non-negative ``offset`` bounded by ``MODELSHEET["max_offset"]``."""
+    try:
+        offset = max(0, int(params.get("offset", 0)))
+    except (TypeError, ValueError):
+        raise SheetError("invalid_offset", "Offset must be an integer.")
+    if offset > config()["max_offset"]:
+        raise SheetError(
+            "offset_limit", "Offset is too large; narrow the view with filters instead."
+        )
+    return offset
+
+
 def parse_state(params):
+    if not hasattr(params, "get"):
+        raise SheetError("invalid_state", "Invalid view state.")
     try:
         filters = params.get("filter", {})
         sort = params.get("sort", [])
@@ -86,7 +101,7 @@ def parse_state(params):
             "q": str(params.get("q", ""))[:500],
             "filter": json.loads(filters) if isinstance(filters, str) else filters,
             "sort": json.loads(sort) if isinstance(sort, str) else sort,
-            "offset": max(0, int(params.get("offset", 0))),
+            "offset": parse_offset(params),
             "limit": min(
                 config()["max_page_size"], max(1, int(params.get("limit", config()["page_size"])))
             ),
