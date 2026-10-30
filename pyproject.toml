@@ -4,8 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-modelsheet"
-version = "0.3.0"
+version = "0.4.0"
 description = "Spreadsheet editing, formulas and previewed bulk operations for Django Admin"
+authors = [{ name = "svalench" }]
+keywords = ["django", "django-admin", "spreadsheet", "bulk-edit", "formulas"]
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -16,7 +18,17 @@ classifiers = [
   "Framework :: Django :: 5.2",
   "Framework :: Django :: 6.0",
   "Framework :: Django :: 6.1",
+  "Environment :: Web Environment",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+  "Typing :: Typed",
 ]
 
 [project.urls]
