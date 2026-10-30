@@ -5,7 +5,7 @@ from django.contrib import admin
 
 from demo.shop.models import Product
 
-from .conftest import loaded, post, preview_payload, save_payload
+from .conftest import BASE, loaded, post, preview_payload, save_payload
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -45,3 +45,23 @@ def test_bulk_preview_marks_object_readonly_rows_as_errors(api, lock_first):
     assert post(api, "bulk/run", {"operation": op["id"]}).status_code == 409
     lock_first.refresh_from_db()
     assert lock_first.price == Decimal("10.00")
+
+
+def test_snapshots_are_pruned_per_user(api, products, settings):
+    from modelsheet.models import ViewSnapshot
+
+    settings.MODELSHEET = {"max_snapshots_per_user": 3}
+    views = [loaded(api) for _ in range(5)]
+    assert ViewSnapshot.objects.count() == 3
+    # The newest snapshot is still usable for saving.
+    response = post(api, "save", save_payload(views[-1], {"price": 11}))
+    assert response.status_code == 200, response.content
+
+
+def test_snapshot_reads_are_rate_limited(api, products, settings):
+    settings.MODELSHEET = {"max_snapshots_per_minute": 2}
+    loaded(api)
+    loaded(api)
+    response = api.get(BASE + "rows/")
+    assert response.status_code == 429
+    assert response.json()["error"]["code"] == "rate_limit"

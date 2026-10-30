@@ -151,6 +151,7 @@ def rows(request, admin, params):
         result.append(
             {"pk": str(obj.pk), "version": version(obj), "values": original_values(obj, fields)}
         )
+    snapshot_rate_limit(request)
     snapshot = ViewSnapshot.objects.create(
         user=request.user,
         model_label=admin.model._meta.label,
@@ -159,6 +160,7 @@ def rows(request, admin, params):
         rows=result,
         columns=columns,
     )
+    prune_snapshots(request)
     return {
         "rows": result,
         "snapshot": str(snapshot.pk),
@@ -215,6 +217,32 @@ def rate_limit(request):
         >= config()["max_operations_per_minute"]
     ):
         raise SheetError("rate_limit", "Too many operations. Try again later.", status=429)
+
+
+def snapshot_rate_limit(request):
+    """Every GET /rows stores a snapshot, so reads are throttled separately from writes."""
+    if (
+        ViewSnapshot.objects.filter(
+            user=request.user, created_at__gte=timezone.now() - timedelta(minutes=1)
+        ).count()
+        >= config()["max_snapshots_per_minute"]
+    ):
+        raise SheetError("rate_limit", "Too many sheet reloads. Try again later.", status=429)
+
+
+def prune_snapshots(request):
+    """Keep only the newest snapshots of this user and drop expired ones."""
+    settings = config()
+    mine = ViewSnapshot.objects.filter(user=request.user)
+    mine.filter(
+        created_at__lt=timezone.now() - timedelta(seconds=settings["snapshot_ttl_seconds"])
+    ).delete()
+    keep = list(
+        mine.order_by("-created_at").values_list("pk", flat=True)[
+            : settings["max_snapshots_per_user"]
+        ]
+    )
+    mine.exclude(pk__in=keep).delete()
 
 
 def validate_values(obj, values, request, fields):

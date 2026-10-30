@@ -27,6 +27,8 @@ def check_configuration(app_configs, **kwargs):
             "history_retention_days",
             "max_bulk_rows",
             "max_operations_per_minute",
+            "max_snapshots_per_minute",
+            "max_snapshots_per_user",
             "snapshot_ttl_seconds",
             "preview_ttl_seconds",
         ):

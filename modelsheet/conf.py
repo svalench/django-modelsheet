@@ -18,6 +18,8 @@ DEFAULTS = {
     "max_filter_depth": 10,
     "max_filter_nodes": 100,
     "max_operations_per_minute": 30,
+    "max_snapshots_per_minute": 120,
+    "max_snapshots_per_user": 50,
     "formula": {"max_depth": 10, "max_length": 500, "timeout_ms": 250, "max_steps": 10000},
     "field_adapter": "modelsheet.adapters.FieldAdapter",
     "save_adapter": "modelsheet.adapters.SaveAdapter",
