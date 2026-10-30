@@ -15,7 +15,7 @@ from .adapters import serialize
 from .errors import SheetError
 from .formula import FormulaError, references
 from .formula.engine import QueryAggregates
-from .metadata import fields_for, require_fields
+from .metadata import fields_for, require_fields, require_object_editable
 from .models import Operation, OperationItem
 from .query import parse_state, queryset
 from .services import (
@@ -179,6 +179,7 @@ def build_plan(request, admin, op):
         before = {n: originals[pk][n] for n in parameters["assignments"]}
         try:
             row_allowed(request, admin, obj, edit=True)
+            require_object_editable(request, admin, obj, parameters["assignments"])
             for name, raw in parameters["assignments"].items():
                 if isinstance(raw, str) and raw.startswith("'="):
                     values[name] = raw[1:]
@@ -312,6 +313,7 @@ def execute_items(request, admin, op, items, *, atomic=False):
                     raise SheetError(
                         "row_conflict", "Row changed since preview.", status=409, pk=item.pk_value
                     )
+                require_object_editable(request, admin, obj, item.after)
                 validate_values(obj, item.after, request, fields)
                 save_object(obj, item.after.keys(), request)
                 item.version, item.status = version(obj), "done"

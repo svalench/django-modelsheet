@@ -40,3 +40,21 @@ def require_fields(names, fields, *, edit=False):
                 status=403,
                 field=name,
             )
+
+
+def require_object_editable(request, admin, obj, names):
+    """Re-check ``get_readonly_fields`` with the concrete object.
+
+    Admin classes commonly lock fields per record (``if obj and obj.locked``); the
+    sheet schema is built without an object, so every write re-validates here.
+    """
+    readonly = set(admin.get_readonly_fields(request, obj))
+    for name in names:
+        if name in readonly:
+            raise SheetError(
+                "readonly_field",
+                "Field is read-only for this row.",
+                status=403,
+                pk=str(obj.pk),
+                field=name,
+            )

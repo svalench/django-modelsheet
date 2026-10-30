@@ -14,7 +14,7 @@ from .adapters import serialize
 from .conf import component, config
 from .errors import SheetError
 from .formula import FormulaError, evaluate, parse, references
-from .metadata import fields_for, require_fields
+from .metadata import fields_for, require_fields, require_object_editable
 from .models import Operation, OperationItem, ViewSnapshot
 from .permissions import require_access
 from .query import parse_state, queryset
@@ -407,6 +407,7 @@ def save(request, admin, payload):
             )
             for pk, values in evaluated.items():
                 obj = objects[pk]
+                require_object_editable(request, admin, obj, values)
                 before = {n: original_values(obj, fields)[n] for n in values}
                 validate_values(obj, values, request, fields)
                 save_object(obj, values.keys(), request)
