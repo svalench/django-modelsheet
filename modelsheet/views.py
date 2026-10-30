@@ -3,30 +3,39 @@ import json
 from django.core.exceptions import RequestDataTooBig, ValidationError
 from django.db import OperationalError
 from django.http import JsonResponse
+from django.utils.translation import gettext_lazy as _
 
 from . import bulk, services
 from .conf import config
 from .errors import SheetError
 from .models import Operation
+from .permissions import scope_history
+from .query import parse_offset
 
 
 def endpoint(request, admin, action, operation_id=None):
     expected = "GET" if action in ("schema", "rows", "operation", "history") else "POST"
     if request.method != expected:
         response = JsonResponse(
-            {"error": {"code": "method_not_allowed", "message": f"Use {expected}."}}, status=405
+            {
+                "error": {
+                    "code": "method_not_allowed",
+                    "message": _("Use %(method)s.") % {"method": expected},
+                }
+            },
+            status=405,
         )
         response["Allow"] = expected
         return response
     try:
         if expected == "POST":
             if request.content_type != "application/json":
-                raise SheetError("content_type", "Use application/json.", status=415)
+                raise SheetError("content_type", _("Use application/json."), status=415)
             if len(request.body) > config()["max_request_bytes"]:
-                raise SheetError("request_limit", "Request body is too large.", status=413)
+                raise SheetError("request_limit", _("Request body is too large."), status=413)
             payload = json.loads(request.body or b"{}")
             if not isinstance(payload, dict):
-                raise SheetError("invalid_json", "Expected a JSON object.")
+                raise SheetError("invalid_json", _("Expected a JSON object."))
         if action == "schema":
             data = services.schema(request, admin)
         elif action == "rows":
@@ -42,15 +51,15 @@ def endpoint(request, admin, action, operation_id=None):
         elif action == "operation":
             services.check_model(request, admin)
             op = services.get_operation(request, admin, operation_id, own=False)
-            data = services.report(
-                request, admin, op, own=True, offset=max(0, int(request.GET.get("offset", 0)))
-            )
+            data = services.report(request, admin, op, own=True, offset=parse_offset(request.GET))
         elif action == "history":
             services.check_model(request, admin, action="history")
-            offset = max(0, int(request.GET.get("offset", 0)))
-            ops = Operation.objects.filter(
-                model_label=admin.model._meta.label, site_name=admin.admin_site.name
-            ).order_by("-created_at")
+            offset = parse_offset(request.GET)
+            ops = (
+                scope_history(Operation.objects.all(), request.user)
+                .filter(model_label=admin.model._meta.label, site_name=admin.admin_site.name)
+                .order_by("-created_at")
+            )
             data = {
                 "operations": [
                     services.report(request, admin, op, include_items=False)
@@ -65,16 +74,13 @@ def endpoint(request, admin, action, operation_id=None):
         json.JSONDecodeError,
         UnicodeDecodeError,
         ValidationError,
-        ValueError,
-        TypeError,
-        KeyError,
     ):
         response = JsonResponse(
-            {"error": {"code": "invalid_request", "message": "Malformed request."}}, status=400
+            {"error": {"code": "invalid_request", "message": _("Malformed request.")}}, status=400
         )
     except RequestDataTooBig:
         response = JsonResponse(
-            {"error": {"code": "request_limit", "message": "Request body is too large."}},
+            {"error": {"code": "request_limit", "message": _("Request body is too large.")}},
             status=413,
         )
     except OperationalError:
@@ -82,7 +88,7 @@ def endpoint(request, admin, action, operation_id=None):
             {
                 "error": {
                     "code": "database_busy",
-                    "message": "Database unavailable or busy; retry with the same key.",
+                    "message": _("Database unavailable or busy; retry with the same key."),
                 }
             },
             status=503,

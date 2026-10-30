@@ -4,18 +4,19 @@ import datetime as dt
 import uuid
 from datetime import timedelta
 
-from django.db import IntegrityError, transaction
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.utils import timezone
 from django.utils.crypto import constant_time_compare
+from django.utils.translation import gettext_lazy as _
 
-from .conf import component, config
 from .adapters import serialize
+from .conf import component, config
 from .errors import SheetError
 from .formula import FormulaError, references
 from .formula.engine import QueryAggregates
-from .metadata import fields_for, require_fields
+from .metadata import fields_for, require_fields, require_object_editable
 from .models import Operation, OperationItem
 from .query import parse_state, queryset
 from .services import (
@@ -52,7 +53,7 @@ def preview(request, admin, payload):
         return report(request, admin, op, own=True)
     assignments = payload.get("assignments")
     if not isinstance(assignments, dict) or not assignments:
-        raise SheetError("invalid_assignments", "At least one assignment is required.")
+        raise SheetError("invalid_assignments", _("At least one assignment is required."))
     require_fields(assignments, fields, edit=True)
     for name, expression in assignments.items():
         if isinstance(expression, str) and expression.startswith("="):
@@ -62,14 +63,14 @@ def preview(request, admin, payload):
                 if refs["cells"] or refs["columns"]:
                     raise SheetError(
                         "positional_bulk",
-                        "Bulk formulas only accept named field references.",
+                        _("Bulk formulas only accept named field references."),
                         field=name,
                     )
             except FormulaError as exc:
-                raise SheetError(exc.code, str(exc), field=name)
+                raise SheetError(exc.code, str(exc), field=name) from exc
         elif isinstance(expression, (dict, list)):
             raise SheetError(
-                "invalid_assignments", "Assignments must be scalar values.", field=name
+                "invalid_assignments", _("Assignments must be scalar values."), field=name
             )
     selection = payload.get("selection")
     if selection is not None and (
@@ -78,14 +79,16 @@ def preview(request, admin, payload):
         or len(selection) > config()["max_page_size"]
     ):
         raise SheetError(
-            "invalid_selection", "Select rows on the loaded page or all filtered rows."
+            "invalid_selection", _("Select rows on the loaded page or all filtered rows.")
         )
     if selection is not None:
         from .services import get_snapshot
 
         snapshot = get_snapshot(request, admin, payload.get("snapshot"))
         if not set(map(str, selection)) <= {r["pk"] for r in snapshot.rows}:
-            raise SheetError("invalid_selection", "Selected rows must belong to the loaded page.")
+            raise SheetError(
+                "invalid_selection", _("Selected rows must belong to the loaded page.")
+            )
     parameters = {
         "state": parse_state(payload.get("state", {})),
         "assignments": assignments,
@@ -95,13 +98,13 @@ def preview(request, admin, payload):
     qs = candidate_queryset(request, admin, fields, parameters)
     count = qs.count()
     if count > config()["max_bulk_rows"]:
-        raise SheetError("bulk_limit", "Too many matching rows. Narrow the filter.")
+        raise SheetError("bulk_limit", _("Too many matching rows. Narrow the filter."))
     background = count > config()["bulk_background_threshold"]
     adapter = component("background_adapter")
     if background and adapter is None:
         raise SheetError(
             "background_required",
-            "Configure a background adapter or narrow the filter.",
+            _("Configure a background adapter or narrow the filter."),
             status=409,
         )
     try:
@@ -128,9 +131,9 @@ def preview(request, admin, payload):
     except IntegrityError:
         raise SheetError(
             "idempotency_conflict",
-            "Concurrent operation submission. Retry with the same key.",
+            _("Concurrent operation submission. Retry with the same key."),
             status=409,
-        )
+        ) from None
     if background:
         enqueue(op, "preview")
     return report(request, admin, op, own=True)
@@ -149,11 +152,11 @@ def build_plan(request, admin, op):
         candidate_queryset(request, admin, fields, parameters).order_by("pk")[: limit + 1]
     )
     if len(objects) > config()["max_bulk_rows"]:
-        raise SheetError("bulk_limit", "Matching set grew beyond the configured limit.")
+        raise SheetError("bulk_limit", _("Matching set grew beyond the configured limit."))
     if len(objects) > limit:
         raise SheetError(
             "preview_changed",
-            "Matching set grew; request a new preview for background processing.",
+            _("Matching set grew; request a new preview for background processing."),
             status=409,
         )
     # Reject the whole plan before reading values if any member is hidden. Silently
@@ -179,6 +182,7 @@ def build_plan(request, admin, op):
         before = {n: originals[pk][n] for n in parameters["assignments"]}
         try:
             row_allowed(request, admin, obj, edit=True)
+            require_object_editable(request, admin, obj, parameters["assignments"])
             for name, raw in parameters["assignments"].items():
                 if isinstance(raw, str) and raw.startswith("'="):
                     values[name] = raw[1:]
@@ -226,37 +230,37 @@ def enqueue(op, phase):
         op.refresh_from_db()
         raise SheetError(
             "dispatch_failed",
-            "Queue submission failed; operation can be resumed.",
+            _("Queue submission failed; operation can be resumed."),
             status=503,
             details={"operation": str(op.pk)},
-        )
+        ) from None
 
 
 def require_fresh_preview(op):
     if op.preview_expires_at is None or op.preview_expires_at <= timezone.now():
-        raise SheetError("expired_preview", "Create a new preview.", status=409)
+        raise SheetError("expired_preview", _("Create a new preview."), status=409)
 
 
 def run(request, admin, operation_id):
     check_model(request, admin, change=True, action="bulk")
     op = get_operation(request, admin, operation_id)
     if op.kind != "bulk":
-        raise SheetError("invalid_operation", "Only bulk previews can be executed.")
+        raise SheetError("invalid_operation", _("Only bulk previews can be executed."))
     background = op.total > config()["bulk_background_threshold"]
     if background and component("background_adapter") is None:
-        raise SheetError("background_required", "A background adapter is required.", status=409)
+        raise SheetError("background_required", _("A background adapter is required."), status=409)
     with write_transaction():
         op = Operation.objects.select_for_update().get(pk=op.pk)
         if op.status in ("done", "running", "queued", "cancelled", "partial"):
             return report(request, admin, op, own=True)
         if op.status != "preview":
             raise SheetError(
-                "invalid_status", "Operation is not ready for confirmation.", status=409
+                "invalid_status", _("Operation is not ready for confirmation."), status=409
             )
         require_fresh_preview(op)
         if op.errors:
             raise SheetError(
-                "invalid_preview", "Fix preview errors and create a new preview.", status=409
+                "invalid_preview", _("Fix preview errors and create a new preview."), status=409
             )
         if background:
             # Even a plan made synchronously can require a worker after settings change.
@@ -305,13 +309,20 @@ def execute_items(request, admin, op, items, *, atomic=False):
                 )
                 if obj is None:
                     raise SheetError(
-                        "row_conflict", "Row is no longer available.", status=409, pk=item.pk_value
+                        "row_conflict",
+                        _("Row is no longer available."),
+                        status=409,
+                        pk=item.pk_value,
                     )
                 row_allowed(request, admin, obj, edit=True)
                 if not constant_time_compare(version(obj), item.version):
                     raise SheetError(
-                        "row_conflict", "Row changed since preview.", status=409, pk=item.pk_value
+                        "row_conflict",
+                        _("Row changed since preview."),
+                        status=409,
+                        pk=item.pk_value,
                     )
+                require_object_editable(request, admin, obj, item.after)
                 validate_values(obj, item.after, request, fields)
                 save_object(obj, item.after.keys(), request)
                 item.version, item.status = version(obj), "done"
@@ -350,7 +361,7 @@ def resume(request, admin, operation_id):
     check_model(request, admin, change=True, action="bulk")
     adapter = component("background_adapter")
     if adapter is None:
-        raise SheetError("background_required", "A background adapter is required.", status=409)
+        raise SheetError("background_required", _("A background adapter is required."), status=409)
     with write_transaction():
         op = get_operation(request, admin, operation_id)
         op = Operation.objects.select_for_update().get(pk=op.pk)
@@ -362,9 +373,9 @@ def resume(request, admin, operation_id):
             "preparing",
             "queued",
         ):
-            raise SheetError("invalid_status", "Operation cannot be resumed.", status=409)
+            raise SheetError("invalid_status", _("Operation cannot be resumed."), status=409)
         if op.lease_until and op.lease_until > timezone.now():
-            raise SheetError("worker_active", "A worker still owns this operation.", status=409)
+            raise SheetError("worker_active", _("A worker still owns this operation."), status=409)
         phase = "run" if op.parameters.get("confirmed") else "preview"
         if phase == "preview" and (op.preview_expires_at is not None or op.items.exists()):
             # A completed preview must never be rebuilt or implicitly confirmed.
@@ -391,13 +402,13 @@ def process_operation(request, admin, operation_id, phase):
             return
         if op.lease_until and op.lease_until > timezone.now():
             raise SheetError(
-                "worker_active", "Retry after the current worker lease expires.", status=409
+                "worker_active", _("Retry after the current worker lease expires."), status=409
             )
         if phase not in ("preview", "run") or (
             phase == "run" and not op.parameters.get("confirmed")
         ):
             raise SheetError(
-                "not_confirmed", "Worker cannot execute an unconfirmed plan.", status=409
+                "not_confirmed", _("Worker cannot execute an unconfirmed plan."), status=409
             )
         if phase == "preview" and op.parameters.get("confirmed"):
             return

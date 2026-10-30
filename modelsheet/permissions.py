@@ -1,6 +1,8 @@
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
+from django.utils.translation import gettext_lazy as _
 
+from .conf import config
 from .errors import SheetError
 
 
@@ -27,6 +29,17 @@ class PermissionPolicy:
         return admin.has_change_permission(request, obj)
 
 
+def can_view_all_history(user):
+    """Whether ``user`` may see operations of other users (see ``history_scope``)."""
+    if config()["history_scope"] == "all":
+        return True
+    return user.is_superuser or user.has_perm("modelsheet.view_all_history")
+
+
+def scope_history(queryset, user):
+    return queryset if can_view_all_history(user) else queryset.filter(user=user)
+
+
 def require_access(request, admin, *, change=False, action=None):
     user, model = request.user, admin.model
     if not (
@@ -36,23 +49,29 @@ def require_access(request, admin, *, change=False, action=None):
         and user.has_perm(f"{model._meta.app_label}.view_{model._meta.model_name}")
         and admin.has_view_permission(request)
     ):
-        raise SheetError("forbidden", "Sheet access denied.", status=403)
+        raise SheetError("forbidden", _("Sheet access denied."), status=403)
     if change and not (
         user.has_perm(f"{model._meta.app_label}.change_{model._meta.model_name}")
         and admin.has_change_permission(request)
     ):
-        raise SheetError("forbidden", "Change permission required.", status=403)
+        raise SheetError("forbidden", _("Change permission required."), status=403)
     if action and not allowed(user, action, model):
-        raise SheetError("forbidden", f"{action} permission required.", status=403)
+        raise SheetError(
+            "forbidden", _("%(action)s permission required.") % {"action": action}, status=403
+        )
 
 
 def create_permissions(sender, using="default", **kwargs):
     from django.contrib.admin import sites
+
     from .admin import ModelSheetAdmin
     from .models import Operation
 
     content_type = ContentType.objects.db_manager(using).get_for_model(Operation)
-    definitions = {"open": "Can open model sheets"}
+    definitions = {
+        "open": "Can open model sheets",
+        "view_all_history": "Can view model sheet operations of all users",
+    }
     for site in list(sites.all_sites):
         for model, admin in site._registry.items():
             if not isinstance(admin, ModelSheetAdmin):

@@ -1,8 +1,8 @@
 import datetime as dt
-from decimal import Decimal, ROUND_HALF_EVEN, localcontext
+from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 
-from django.core.exceptions import ValidationError
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
@@ -83,9 +83,9 @@ class FieldAdapter:
                 raise ValidationError("A finite number is required.")
         value = field.to_python(value)
         if isinstance(value, dt.datetime) and timezone.is_naive(value) and settings.USE_TZ:
-            value = timezone.make_aware(value, dt.timezone.utc)
+            value = timezone.make_aware(value, dt.UTC)
         elif isinstance(value, dt.datetime) and timezone.is_aware(value) and not settings.USE_TZ:
-            value = value.astimezone(dt.timezone.utc).replace(tzinfo=None)
+            value = value.astimezone(dt.UTC).replace(tzinfo=None)
         return value
 
     def metadata(self, field):

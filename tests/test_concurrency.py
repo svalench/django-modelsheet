@@ -11,6 +11,7 @@ from demo.shop.models import Product
 from modelsheet.errors import SheetError
 from modelsheet.models import Operation
 from modelsheet.views import endpoint
+
 from .conftest import loaded, save_payload
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -46,6 +47,7 @@ def test_concurrent_saves_cannot_both_overwrite_same_version(api, products, user
 
 def test_sqlite_refuses_unsafe_transaction_mode(settings):
     from django.db import connections
+
     from modelsheet.services import write_transaction
 
     connection = connections["default"]

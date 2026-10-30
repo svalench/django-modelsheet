@@ -9,7 +9,7 @@ class SheetError(Exception):
             k: v
             for k, v in {
                 "code": self.code,
-                "message": self.message,
+                "message": str(self.message),
                 "pk": self.pk,
                 "field": self.field,
                 "details": self.details,

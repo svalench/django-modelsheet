@@ -3,8 +3,8 @@ from django.contrib.auth import get_user_model
 
 from .bulk import process_operation
 from .conf import component
-from .models import Operation
 from .errors import SheetError
+from .models import Operation
 
 
 def process(operation_id, phase):

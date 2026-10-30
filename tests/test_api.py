@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from demo.shop.models import Product
 from modelsheet.models import Operation, ViewSnapshot
+
 from .conftest import BASE, loaded, post, preview_payload, save_payload
 
 pytestmark = pytest.mark.django_db(transaction=True)

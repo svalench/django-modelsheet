@@ -27,11 +27,16 @@ def check_configuration(app_configs, **kwargs):
             "history_retention_days",
             "max_bulk_rows",
             "max_operations_per_minute",
+            "max_snapshots_per_minute",
+            "max_snapshots_per_user",
+            "max_offset",
             "snapshot_ttl_seconds",
             "preview_ttl_seconds",
         ):
             if not isinstance(settings[key], int) or settings[key] < 1:
                 errors.append(Error(f"{key} must be a positive integer", id="modelsheet.E002"))
+        if settings["history_scope"] not in ("all", "own"):
+            errors.append(Error("history_scope must be all or own", id="modelsheet.E009"))
         if settings["count_mode"] not in ("exact", "none"):
             errors.append(Error("count_mode must be exact or none", id="modelsheet.E003"))
         if settings["page_size"] > settings["max_page_size"]:

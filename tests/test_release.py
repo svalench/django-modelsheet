@@ -1,6 +1,6 @@
 import json
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 import pytest
 import yaml
@@ -25,7 +25,7 @@ def release_tree(tmp_path):
 
 
 def test_stable_versions_and_tag_are_consistent():
-    assert validate_release(ROOT, tag="v0.3.0", stable=True) == "0.3.0"
+    assert validate_release(ROOT, tag="v0.4.0", stable=True) == "0.4.0"
 
 
 @pytest.mark.parametrize(
@@ -33,7 +33,7 @@ def test_stable_versions_and_tag_are_consistent():
 )
 def test_release_check_rejects_version_drift(release_tree, name):
     path = release_tree / name
-    path.write_text(path.read_text().replace("0.3.0", "0.3.1", 1))
+    path.write_text(path.read_text().replace("0.4.0", "0.4.1", 1))
     with pytest.raises(ValueError, match="versions must match"):
         validate_release(release_tree, stable=True)
 

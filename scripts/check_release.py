@@ -3,9 +3,9 @@
 import argparse
 import ast
 import json
-from pathlib import Path
 import re
 import tomllib
+from pathlib import Path
 
 
 def validate_release(root, *, tag=None, stable=False):

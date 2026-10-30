@@ -4,8 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-modelsheet"
-version = "0.3.0"
+version = "0.4.0"
 description = "Spreadsheet editing, formulas and previewed bulk operations for Django Admin"
+authors = [{ name = "svalench" }]
+keywords = ["django", "django-admin", "spreadsheet", "bulk-edit", "formulas"]
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -16,7 +18,17 @@ classifiers = [
   "Framework :: Django :: 5.2",
   "Framework :: Django :: 6.0",
   "Framework :: Django :: 6.1",
+  "Environment :: Web Environment",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+  "Typing :: Typed",
 ]
 
 [project.urls]
@@ -26,7 +38,7 @@ Issues = "https://github.com/svalench/django-modelsheet/issues"
 Changelog = "https://github.com/svalench/django-modelsheet/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-test = ["pytest>=8", "pytest-django>=4.9", "pytest-timeout>=2", "build", "ruff", "playwright", "PyYAML>=6"]
+test = ["pytest>=8", "pytest-django>=4.9", "pytest-timeout>=2", "build", "ruff", "mypy", "pytest-cov", "playwright", "PyYAML>=6"]
 postgres = ["psycopg[binary]>=3.2"]
 mysql = ["mysqlclient>=2.2"]
 
@@ -46,4 +58,15 @@ timeout = 30
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F"]
+select = ["E4", "E7", "E9", "F", "B", "I", "UP", "S", "DJ"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S506"]
+"scripts/**" = ["S101", "S603", "S607", "DJ008"]
+"demo/**" = ["S105", "DJ008", "DJ012"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["modelsheet"]
+ignore_missing_imports = true
+warn_unused_ignores = true

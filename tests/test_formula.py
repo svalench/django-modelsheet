@@ -65,6 +65,7 @@ def test_iferror_cannot_swallow_budget():
 
 def test_cached_query_aggregates_preserve_values_errors_and_laziness(monkeypatch):
     from collections import Counter
+
     from modelsheet.formula import engine
 
     calls = Counter()

@@ -5,9 +5,10 @@ from django.contrib import admin
 from django.test import RequestFactory
 
 from demo.shop.models import Product
+from modelsheet.adapters import SaveAdapter
 from modelsheet.background import process
 from modelsheet.models import Operation
-from modelsheet.adapters import SaveAdapter
+
 from .conftest import BASE, loaded, post, preview_payload
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -168,8 +169,8 @@ def test_row_access_rechecked_at_execution(api, products, monkeypatch):
 
 class RevokeAfterFirstChunk(SaveAdapter):
     def save(self, instance, fields, request):
-        from django.db import transaction
         from django.contrib.auth import get_user_model
+        from django.db import transaction
 
         super().save(instance, fields, request)
         transaction.on_commit(
@@ -258,7 +259,9 @@ def test_background_preview_rechecks_sources_before_aggregation(
 @pytest.mark.parametrize("snapshot_state", ["expired", "deleted"])
 def test_preview_retry_uses_existing_plan_without_snapshot(api, products, snapshot_state):
     from datetime import timedelta
+
     from django.utils import timezone
+
     from modelsheet.models import ViewSnapshot
 
     view = loaded(api)
@@ -294,6 +297,7 @@ def test_preview_retry_ignores_new_members_but_checks_access(api, products, sett
 
 def test_bulk_aggregates_and_parsing_are_shared_within_each_plan(api, products, monkeypatch):
     from collections import Counter
+
     from modelsheet import bulk
     from modelsheet.formula import engine
 
@@ -328,6 +332,7 @@ def test_bulk_aggregates_and_parsing_are_shared_within_each_plan(api, products, 
 
 def test_expired_preview_cannot_be_renewed_by_cancel_resume(api, products, settings):
     from datetime import timedelta
+
     from django.utils import timezone
 
     settings.MODELSHEET = {
@@ -385,6 +390,7 @@ def test_background_deadline_starts_after_preparation_and_does_not_stop_confirme
     api, products, background
 ):
     from datetime import timedelta
+
     from django.utils import timezone
 
     result = post(api, "bulk/preview", preview_payload()).json()

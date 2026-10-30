@@ -4,19 +4,20 @@ import re
 from contextlib import contextmanager
 from datetime import timedelta
 
-from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connections, transaction
 from django.utils import timezone
 from django.utils.crypto import constant_time_compare, salted_hmac
+from django.utils.translation import gettext_lazy as _
 
 from .adapters import serialize
 from .conf import component, config
 from .errors import SheetError
 from .formula import FormulaError, evaluate, parse, references
-from .metadata import fields_for, require_fields
+from .metadata import fields_for, require_fields, require_object_editable
 from .models import Operation, OperationItem, ViewSnapshot
-from .permissions import require_access
+from .permissions import require_access, scope_history
 from .query import parse_state, queryset
 from .registry import is_enabled
 
@@ -61,12 +62,12 @@ def write_transaction():
     ):
         raise SheetError(
             "sqlite_configuration",
-            "SQLite writes require OPTIONS.transaction_mode=IMMEDIATE.",
+            _("SQLite writes require OPTIONS.transaction_mode=IMMEDIATE."),
             status=503,
         )
     if connection.in_atomic_block:
         raise SheetError(
-            "nested_transaction", "Sheet writes require an independent transaction.", status=503
+            "nested_transaction", _("Sheet writes require an independent transaction."), status=503
         )
     with transaction.atomic(using="default"):
         yield
@@ -74,7 +75,7 @@ def write_transaction():
 
 def check_model(request, admin, **kwargs):
     if not is_enabled(admin):
-        raise SheetError("not_enabled", "This model is not enabled.", status=404)
+        raise SheetError("not_enabled", _("This model is not enabled."), status=404)
     require_access(request, admin, **kwargs)
 
 
@@ -83,7 +84,7 @@ def row_allowed(request, admin, obj, *, edit=False):
     if not policy.can_view_object(request, admin, obj) or (
         edit and not policy.can_edit_object(request, admin, obj)
     ):
-        raise SheetError("forbidden", "Row is unavailable for this operation.", status=403)
+        raise SheetError("forbidden", _("Row is unavailable for this operation."), status=403)
 
 
 def computed_columns(admin, fields):
@@ -139,7 +140,7 @@ def rows(request, admin, params):
         columns = list(fields)
         state["columns"] = columns
     if not isinstance(columns, list) or len(columns) != len(set(columns)):
-        raise SheetError("invalid_columns", "Columns must be a unique field list.")
+        raise SheetError("invalid_columns", _("Columns must be a unique field list."))
     require_fields(columns, fields)
     qs = queryset(request, admin, fields, state)
     result = []
@@ -151,6 +152,7 @@ def rows(request, admin, params):
         result.append(
             {"pk": str(obj.pk), "version": version(obj), "values": original_values(obj, fields)}
         )
+    snapshot_rate_limit(request)
     snapshot = ViewSnapshot.objects.create(
         user=request.user,
         model_label=admin.model._meta.label,
@@ -159,6 +161,7 @@ def rows(request, admin, params):
         rows=result,
         columns=columns,
     )
+    prune_snapshots(request)
     return {
         "rows": result,
         "snapshot": str(snapshot.pk),
@@ -180,16 +183,18 @@ def get_snapshot(request, admin, snapshot_id):
             site_name=admin.admin_site.name,
         )
     except (ViewSnapshot.DoesNotExist, ValidationError, ValueError):
-        raise SheetError("invalid_snapshot", "View snapshot is unavailable.", status=409)
+        raise SheetError(
+            "invalid_snapshot", _("View snapshot is unavailable."), status=409
+        ) from None
     if snapshot.created_at < timezone.now() - timedelta(seconds=config()["snapshot_ttl_seconds"]):
-        raise SheetError("expired_snapshot", "Reload the sheet before saving.", status=409)
+        raise SheetError("expired_snapshot", _("Reload the sheet before saving."), status=409)
     return snapshot
 
 
 def operation_key(payload):
     key = payload.get("idempotency_key")
     if not isinstance(key, str) or not 1 <= len(key) <= 128:
-        raise SheetError("invalid_key", "An idempotency_key of 1–128 characters is required.")
+        raise SheetError("invalid_key", _("An idempotency_key of 1–128 characters is required."))
     return key
 
 
@@ -202,7 +207,7 @@ def existing_operation(request, admin, key, request_hash):
     ).first()
     if op and op.request_hash != request_hash:
         raise SheetError(
-            "idempotency_conflict", "This key belongs to a different request.", status=409
+            "idempotency_conflict", _("This key belongs to a different request."), status=409
         )
     return op
 
@@ -214,7 +219,33 @@ def rate_limit(request):
         ).count()
         >= config()["max_operations_per_minute"]
     ):
-        raise SheetError("rate_limit", "Too many operations. Try again later.", status=429)
+        raise SheetError("rate_limit", _("Too many operations. Try again later."), status=429)
+
+
+def snapshot_rate_limit(request):
+    """Every GET /rows stores a snapshot, so reads are throttled separately from writes."""
+    if (
+        ViewSnapshot.objects.filter(
+            user=request.user, created_at__gte=timezone.now() - timedelta(minutes=1)
+        ).count()
+        >= config()["max_snapshots_per_minute"]
+    ):
+        raise SheetError("rate_limit", _("Too many sheet reloads. Try again later."), status=429)
+
+
+def prune_snapshots(request):
+    """Keep only the newest snapshots of this user and drop expired ones."""
+    settings = config()
+    mine = ViewSnapshot.objects.filter(user=request.user)
+    mine.filter(
+        created_at__lt=timezone.now() - timedelta(seconds=settings["snapshot_ttl_seconds"])
+    ).delete()
+    keep = list(
+        mine.order_by("-created_at").values_list("pk", flat=True)[
+            : settings["max_snapshots_per_user"]
+        ]
+    )
+    mine.exclude(pk__in=keep).delete()
 
 
 def validate_values(obj, values, request, fields):
@@ -225,7 +256,7 @@ def validate_values(obj, values, request, fields):
         except (ValidationError, ValueError, TypeError, ArithmeticError) as exc:
             raise SheetError(
                 "invalid_value",
-                "Value cannot be parsed for this field.",
+                _("Value cannot be parsed for this field."),
                 pk=str(obj.pk),
                 field=name,
             ) from exc
@@ -234,7 +265,9 @@ def validate_values(obj, values, request, fields):
     except ValidationError as exc:
         errors = getattr(exc, "message_dict", {"__all__": exc.messages})
         visible = {key: messages for key, messages in errors.items() if key in fields}
-        raise SheetError("validation", "Row validation failed.", pk=str(obj.pk), details=visible)
+        raise SheetError(
+            "validation", _("Row validation failed."), pk=str(obj.pk), details=visible
+        ) from exc
 
 
 def save_object(obj, names, request):
@@ -244,12 +277,14 @@ def save_object(obj, names, request):
     except IntegrityError:
         raise SheetError(
             "constraint_conflict",
-            "A database constraint prevented saving.",
+            _("A database constraint prevented saving."),
             pk=str(obj.pk),
             status=409,
-        )
+        ) from None
     except ValidationError:
-        raise SheetError("validation", "The model save hook rejected this row.", pk=str(obj.pk))
+        raise SheetError(
+            "validation", _("The model save hook rejected this row."), pk=str(obj.pk)
+        ) from None
 
 
 def cell_coordinates(address):
@@ -265,7 +300,14 @@ def cell_coordinates(address):
 class SheetCalculation:
     def __init__(self, snapshot, changes, fields):
         self.snapshot, self.fields = snapshot, fields
-        self.rows = {row["pk"]: row for row in snapshot.rows}
+        # Never trust stored values of fields the user can no longer see.
+        self.rows = {
+            row["pk"]: {
+                **row,
+                "values": {k: v for k, v in row.get("values", {}).items() if k in fields},
+            }
+            for row in snapshot.rows
+        }
         self.changes = {str(c["pk"]): c["values"] for c in changes}
         self.cache, self.visiting, self.dependencies = {}, set(), set()
 
@@ -326,7 +368,7 @@ def save(request, admin, payload):
     fields = fields_for(request, admin)
     changes = payload.get("changes")
     if not isinstance(changes, list) or not 1 <= len(changes) <= config()["max_save_rows"]:
-        raise SheetError("save_limit", "Invalid number of changed rows.")
+        raise SheetError("save_limit", _("Invalid number of changed rows."))
     seen = set()
     for change in changes:
         if (
@@ -335,10 +377,10 @@ def save(request, admin, payload):
             or not isinstance(change["values"], dict)
             or not change["values"]
         ):
-            raise SheetError("invalid_changes", "Each change requires pk, version and values.")
+            raise SheetError("invalid_changes", _("Each change requires pk, version and values."))
         pk = str(change["pk"])
         if pk in seen:
-            raise SheetError("duplicate_row", "Submit one change per row.")
+            raise SheetError("duplicate_row", _("Submit one change per row."))
         seen.add(pk)
         require_fields(change["values"], fields, edit=True)
     key, request_hash = operation_key(payload), digest(payload)
@@ -347,7 +389,7 @@ def save(request, admin, payload):
         return report(request, admin, op, own=True)
     snapshot = get_snapshot(request, admin, payload.get("snapshot"))
     if payload.get("view_state") != snapshot.state:
-        raise SheetError("stale_view", "View changed. Reload before saving.", status=409)
+        raise SheetError("stale_view", _("View changed. Reload before saving."), status=409)
     calculation = SheetCalculation(snapshot, changes, fields)
     evaluated = {}
     for change in changes:
@@ -356,14 +398,14 @@ def save(request, admin, payload):
             str(change["version"]), calculation.rows[pk]["version"]
         ):
             raise SheetError(
-                "invalid_version", "Row does not match the loaded snapshot.", pk=pk, status=409
+                "invalid_version", _("Row does not match the loaded snapshot."), pk=pk, status=409
             )
         evaluated[pk] = {}
         for name in change["values"]:
             try:
                 evaluated[pk][name] = calculation.value(pk, name)
             except FormulaError as exc:
-                raise SheetError(exc.code, str(exc), pk=pk, field=name)
+                raise SheetError(exc.code, str(exc), pk=pk, field=name) from exc
     try:
         with write_transaction():
             # Unique keys are also serialized by the user row to handle concurrent first submissions.
@@ -386,14 +428,14 @@ def save(request, admin, payload):
                 if obj is None:
                     raise SheetError(
                         "row_conflict",
-                        "A referenced row is no longer available.",
+                        _("A referenced row is no longer available."),
                         pk=pk,
                         status=409,
                     )
                 row_allowed(request, admin, obj, edit=pk in evaluated)
                 if not constant_time_compare(version(obj), calculation.rows[pk]["version"]):
                     raise SheetError(
-                        "row_conflict", "Row changed since loading.", pk=pk, status=409
+                        "row_conflict", _("Row changed since loading."), pk=pk, status=409
                     )
             op = Operation.objects.create(
                 user=request.user,
@@ -407,6 +449,7 @@ def save(request, admin, payload):
             )
             for pk, values in evaluated.items():
                 obj = objects[pk]
+                require_object_editable(request, admin, obj, values)
                 before = {n: original_values(obj, fields)[n] for n in values}
                 validate_values(obj, values, request, fields)
                 save_object(obj, values.keys(), request)
@@ -423,8 +466,8 @@ def save(request, admin, payload):
             op.save()
     except IntegrityError:
         raise SheetError(
-            "constraint_conflict", "A database constraint prevented saving.", status=409
-        )
+            "constraint_conflict", _("A database constraint prevented saving."), status=409
+        ) from None
     return report(request, admin, op, own=True)
 
 
@@ -437,9 +480,9 @@ def get_operation(request, admin, operation_id, *, own=True):
         }
         if own:
             filters["user"] = request.user
-        return Operation.objects.get(**filters)
+        return scope_history(Operation.objects.all(), request.user).get(**filters)
     except (Operation.DoesNotExist, ValidationError, ValueError):
-        raise SheetError("not_found", "Operation not found.", status=404)
+        raise SheetError("not_found", _("Operation not found."), status=404) from None
 
 
 def report(request, admin, op, *, own=False, offset=0, include_items=True):

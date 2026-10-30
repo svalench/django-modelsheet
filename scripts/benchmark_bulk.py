@@ -9,12 +9,12 @@ cache disabled. It is not a benchmark of an older release.
 import argparse
 import json
 import os
-from pathlib import Path
 import platform
 import statistics
 import sys
 import tempfile
 import time
+from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -80,7 +80,7 @@ with tempfile.TemporaryDirectory(prefix="modelsheet-bulk-bench-") as folder:
             for repeat in range(args.repeats):
                 visits = [0]
 
-                def counted_aggregate(name, values):
+                def counted_aggregate(name, values, visits=visits):
                     visits[0] += len(values)
                     return original_aggregate(name, values)
 

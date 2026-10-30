@@ -1,8 +1,250 @@
 msgid ""
 msgstr ""
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-30 05:48+0000\n"
 "Language: ru\n"
 "Content-Type: text/plain; charset=UTF-8\n"
-"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+msgid "Admin search cannot be transferred exactly."
+msgstr "Поиск Admin нельзя перенести точно."
+
+msgid "Expression ordering cannot be transferred."
+msgstr "Сортировку по выражению нельзя перенести."
+
+msgid "Ordering uses an unavailable field."
+msgstr "Сортировка использует недоступное поле."
+
+msgid "This Admin filter cannot be transferred exactly."
+msgstr "Этот фильтр Admin нельзя перенести точно."
+
+msgid "Admin and sheet page sizes must match."
+msgstr "Размеры страниц Admin и таблицы должны совпадать."
+
+msgid "Remove complex filters before opening ordinary Admin."
+msgstr "Уберите сложные фильтры перед переходом в обычный Admin."
+
+msgid "Admin does not allow this filter."
+msgstr "Admin не допускает этот фильтр."
+
+msgid "Repeated conditions cannot be transferred exactly."
+msgstr "Повторяющиеся условия нельзя перенести точно."
+
+msgid "Admin cannot represent this ordering."
+msgstr "Admin не может отобразить эту сортировку."
+
+msgid "Admin cannot preserve the complete ordering."
+msgstr "Admin не может сохранить сортировку полностью."
+
+msgid "At least one assignment is required."
+msgstr "Требуется хотя бы одно присваивание."
+
+msgid "Bulk formulas only accept named field references."
+msgstr "Массовые формулы допускают только ссылки на поля по имени."
+
+msgid "Assignments must be scalar values."
+msgstr "Присваиваемые значения должны быть скалярными."
+
+msgid "Select rows on the loaded page or all filtered rows."
+msgstr "Выберите строки на загруженной странице или все отфильтрованные строки."
+
+msgid "Selected rows must belong to the loaded page."
+msgstr "Выбранные строки должны принадлежать загруженной странице."
+
+msgid "Too many matching rows. Narrow the filter."
+msgstr "Слишком много подходящих строк. Сузьте фильтр."
+
+msgid "Configure a background adapter or narrow the filter."
+msgstr "Настройте фоновый адаптер или сузьте фильтр."
+
+msgid "Concurrent operation submission. Retry with the same key."
+msgstr "Одновременная отправка операции. Повторите с тем же ключом."
+
+msgid "Matching set grew beyond the configured limit."
+msgstr "Набор подходящих строк превысил настроенный лимит."
+
+msgid "Matching set grew; request a new preview for background processing."
+msgstr "Набор подходящих строк вырос; запросите новый предпросмотр для фоновой обработки."
+
+msgid "Queue submission failed; operation can be resumed."
+msgstr "Не удалось поставить в очередь; операцию можно возобновить."
+
+msgid "Create a new preview."
+msgstr "Создайте новый предпросмотр."
+
+msgid "Only bulk previews can be executed."
+msgstr "Выполнять можно только предпросмотры массовых операций."
+
+msgid "A background adapter is required."
+msgstr "Требуется фоновый адаптер."
+
+msgid "Operation is not ready for confirmation."
+msgstr "Операция не готова к подтверждению."
+
+msgid "Fix preview errors and create a new preview."
+msgstr "Исправьте ошибки предпросмотра и создайте новый."
+
+msgid "Row is no longer available."
+msgstr "Строка больше недоступна."
+
+msgid "Row changed since preview."
+msgstr "Строка изменилась после предпросмотра."
+
+msgid "Operation cannot be resumed."
+msgstr "Операцию нельзя возобновить."
+
+msgid "A worker still owns this operation."
+msgstr "Операция всё ещё выполняется обработчиком."
+
+msgid "Retry after the current worker lease expires."
+msgstr "Повторите после истечения аренды текущего обработчика."
+
+msgid "Worker cannot execute an unconfirmed plan."
+msgstr "Обработчик не может выполнить неподтверждённый план."
+
+msgid "Field is unavailable for this operation."
+msgstr "Поле недоступно для этой операции."
+
+msgid "Field is read-only for this row."
+msgstr "Поле доступно только для чтения в этой строке."
+
+msgid "Sheet access denied."
+msgstr "Доступ к таблице запрещён."
+
+msgid "Change permission required."
+msgstr "Требуется право на изменение."
+
+#, python-format
+msgid "%(action)s permission required."
+msgstr "Требуется право %(action)s."
+
+msgid "Filter is too complex."
+msgstr "Фильтр слишком сложный."
+
+msgid "Expected a filter object."
+msgstr "Ожидался объект фильтра."
+
+msgid "Use one group operator."
+msgstr "Используйте один групповой оператор."
+
+msgid "Filter group must contain conditions."
+msgstr "Группа фильтра должна содержать условия."
+
+msgid "Expected field, op and value."
+msgstr "Ожидались field, op и value."
+
+msgid "Unsupported operator."
+msgstr "Неподдерживаемый оператор."
+
+msgid "Invalid filter value."
+msgstr "Недопустимое значение фильтра."
+
+msgid "Offset must be an integer."
+msgstr "Смещение должно быть целым числом."
+
+msgid "Offset is too large; narrow the view with filters instead."
+msgstr "Слишком большое смещение; сузьте выборку фильтрами."
+
+msgid "Invalid view state."
+msgstr "Недопустимое состояние представления."
+
+msgid "Model sheets currently require the default database."
+msgstr "Таблицы моделей пока работают только с базой данных default."
+
+msgid "Expected up to ten sort fields."
+msgstr "Ожидалось не более десяти полей сортировки."
+
+msgid "Expected field and asc/desc direction."
+msgstr "Ожидались поле и направление asc/desc."
+
+msgid "SQLite writes require OPTIONS.transaction_mode=IMMEDIATE."
+msgstr "Запись в SQLite требует OPTIONS.transaction_mode=IMMEDIATE."
+
+msgid "Sheet writes require an independent transaction."
+msgstr "Запись из таблицы требует отдельной транзакции."
+
+msgid "This model is not enabled."
+msgstr "Эта модель не подключена."
+
+msgid "Row is unavailable for this operation."
+msgstr "Строка недоступна для этой операции."
+
+msgid "Columns must be a unique field list."
+msgstr "Столбцы должны быть списком уникальных полей."
+
+msgid "View snapshot is unavailable."
+msgstr "Снимок представления недоступен."
+
+msgid "Reload the sheet before saving."
+msgstr "Перезагрузите таблицу перед сохранением."
+
+msgid "An idempotency_key of 1–128 characters is required."
+msgstr "Требуется idempotency_key длиной 1–128 символов."
+
+msgid "This key belongs to a different request."
+msgstr "Этот ключ принадлежит другому запросу."
+
+msgid "Too many operations. Try again later."
+msgstr "Слишком много операций. Повторите позже."
+
+msgid "Too many sheet reloads. Try again later."
+msgstr "Слишком много перезагрузок таблицы. Повторите позже."
+
+msgid "Value cannot be parsed for this field."
+msgstr "Значение не подходит для этого поля."
+
+msgid "Row validation failed."
+msgstr "Строка не прошла проверку."
+
+msgid "A database constraint prevented saving."
+msgstr "Ограничение базы данных не позволило сохранить."
+
+msgid "The model save hook rejected this row."
+msgstr "Обработчик сохранения модели отклонил строку."
+
+msgid "Invalid number of changed rows."
+msgstr "Недопустимое количество изменённых строк."
+
+msgid "Each change requires pk, version and values."
+msgstr "Каждое изменение должно содержать pk, version и values."
+
+msgid "Submit one change per row."
+msgstr "Отправляйте одно изменение на строку."
+
+msgid "View changed. Reload before saving."
+msgstr "Представление изменилось. Перезагрузите перед сохранением."
+
+msgid "Row does not match the loaded snapshot."
+msgstr "Строка не соответствует загруженному снимку."
+
+msgid "A referenced row is no longer available."
+msgstr "Строка, на которую есть ссылка, больше недоступна."
+
+msgid "Row changed since loading."
+msgstr "Строка изменилась после загрузки."
+
+msgid "Operation not found."
+msgstr "Операция не найдена."
 
 msgid "Spreadsheet"
 msgstr "Таблица"
+
+#, python-format
+msgid "Use %(method)s."
+msgstr "Используйте %(method)s."
+
+msgid "Use application/json."
+msgstr "Используйте application/json."
+
+msgid "Request body is too large."
+msgstr "Тело запроса слишком большое."
+
+msgid "Expected a JSON object."
+msgstr "Ожидался JSON-объект."
+
+msgid "Malformed request."
+msgstr "Некорректный запрос."
+
+msgid "Database unavailable or busy; retry with the same key."
+msgstr "База данных недоступна или занята; повторите с тем же ключом."

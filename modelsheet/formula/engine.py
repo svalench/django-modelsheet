@@ -3,7 +3,7 @@
 import datetime as dt
 import re
 import time
-from decimal import Decimal, InvalidOperation, ROUND_HALF_EVEN, localcontext
+from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation, localcontext
 
 TOKEN = re.compile(
     r"\s*(?:(\d+(?:\.\d*)?(?:[eE][+-]?\d+)?|\.\d+)|"
@@ -151,7 +151,7 @@ def parse(expression, max_length=500, max_depth=10):
         check(result)
         return result
     except (IndexError, RecursionError):
-        raise FormulaError("#VALUE!", "Incomplete expression")
+        raise FormulaError("#VALUE!", "Incomplete expression") from None
 
 
 def references(node):
@@ -187,7 +187,7 @@ def number(value):
             raise InvalidOperation()
         return result
     except InvalidOperation:
-        raise FormulaError("#VALUE!", "Expected a number")
+        raise FormulaError("#VALUE!", "Expected a number") from None
 
 
 class QueryAggregates:
@@ -346,7 +346,7 @@ def evaluate(
             return aggregate(name, flat)
         if name == "TODAY":
             arity(args, 0, 0)
-            return today or dt.datetime.now(dt.timezone.utc).date()
+            return today or dt.datetime.now(dt.UTC).date()
         if name in ("YEAR", "MONTH", "DAY"):
             arity(args, 1, 1)
             value = values[0]
@@ -387,7 +387,7 @@ def evaluate(
     except FormulaError:
         raise
     except (ArithmeticError, TypeError, ValueError, OverflowError):
-        raise FormulaError("#VALUE!", "Invalid operand")
+        raise FormulaError("#VALUE!", "Invalid operand") from None
 
 
 def text_value(value):
