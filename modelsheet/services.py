@@ -293,7 +293,14 @@ def cell_coordinates(address):
 class SheetCalculation:
     def __init__(self, snapshot, changes, fields):
         self.snapshot, self.fields = snapshot, fields
-        self.rows = {row["pk"]: row for row in snapshot.rows}
+        # Never trust stored values of fields the user can no longer see.
+        self.rows = {
+            row["pk"]: {
+                **row,
+                "values": {k: v for k, v in row.get("values", {}).items() if k in fields},
+            }
+            for row in snapshot.rows
+        }
         self.changes = {str(c["pk"]): c["values"] for c in changes}
         self.cache, self.visiting, self.dependencies = {}, set(), set()
 

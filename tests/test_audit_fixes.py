@@ -65,3 +65,34 @@ def test_snapshot_reads_are_rate_limited(api, products, settings):
     response = api.get(BASE + "rows/")
     assert response.status_code == 429
     assert response.json()["error"]["code"] == "rate_limit"
+
+
+def test_snapshot_values_of_revoked_fields_are_not_used(api, products):
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.models import Permission
+
+    from modelsheet.models import ViewSnapshot
+    from modelsheet.services import SheetCalculation
+
+    user = get_user_model().objects.create_user(username="revoked", is_staff=True)
+    names = [
+        "open",
+        "view_product",
+        "change_product",
+        "view_field_shop_product_name",
+        "view_field_shop_product_price",
+        "edit_field_shop_product_price",
+        "view_field_shop_product_stock",
+    ]
+    user.user_permissions.add(*Permission.objects.filter(codename__in=names))
+    api.force_login(user)
+    view = loaded(api, columns='["name","price","stock"]')
+    assert "stock" in view["rows"][0]["values"]
+    user.user_permissions.remove(Permission.objects.get(codename="view_field_shop_product_stock"))
+    api.force_login(get_user_model().objects.get(pk=user.pk))
+    response = post(api, "save", save_payload(view, {"price": "=C1"}))
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "#REF!"
+    snapshot = ViewSnapshot.objects.get(pk=view["snapshot"])
+    calculation = SheetCalculation(snapshot, [], {"name": {}, "price": {}})
+    assert all("stock" not in row["values"] for row in calculation.rows.values())
