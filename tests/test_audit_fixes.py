@@ -108,9 +108,7 @@ def test_history_scope(api, products, settings, scope, visible):
     op = post(api, "save", save_payload(view, {"price": 12})).json()
     auditor = get_user_model().objects.create_user(username="auditor", is_staff=True)
     auditor.user_permissions.add(
-        *Permission.objects.filter(
-            codename__in=["open", "view_product", "history_shop_product"]
-        )
+        *Permission.objects.filter(codename__in=["open", "view_product", "history_shop_product"])
     )
     api.force_login(auditor)
     ids = [o["id"] for o in api.get(BASE + "history/").json()["operations"]]
@@ -188,3 +186,10 @@ def test_programming_errors_are_not_reported_as_bad_requests(api, monkeypatch):
     monkeypatch.setattr(services, "schema", broken)
     with pytest.raises(TypeError):
         api.get(BASE + "schema/")
+
+
+def test_api_error_messages_are_translated(api, products):
+    response = api.get(BASE + "rows/", {"offset": "abc"}, HTTP_ACCEPT_LANGUAGE="ru")
+    assert response.json()["error"]["message"] == "Смещение должно быть целым числом."
+    response = api.get(BASE + "rows/", {"offset": "abc"}, HTTP_ACCEPT_LANGUAGE="en")
+    assert response.json()["error"]["message"] == "Offset must be an integer."

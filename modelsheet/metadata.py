@@ -1,5 +1,7 @@
 from django.core.exceptions import FieldDoesNotExist
 
+from django.utils.translation import gettext_lazy as _
+
 from .conf import component
 from .errors import SheetError
 
@@ -36,7 +38,7 @@ def require_fields(names, fields, *, edit=False):
         if name not in fields or (edit and not fields[name]["editable"]):
             raise SheetError(
                 "forbidden_field",
-                "Field is unavailable for this operation.",
+                _("Field is unavailable for this operation."),
                 status=403,
                 field=name,
             )
@@ -53,7 +55,7 @@ def require_object_editable(request, admin, obj, names):
         if name in readonly:
             raise SheetError(
                 "readonly_field",
-                "Field is read-only for this row.",
+                _("Field is read-only for this row."),
                 status=403,
                 pk=str(obj.pk),
                 field=name,

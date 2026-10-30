@@ -11,6 +11,8 @@ from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.views.i18n import JavaScriptCatalog
 
+from django.utils.translation import gettext_lazy as _
+
 from .errors import SheetError
 from .metadata import fields_for
 from .permissions import scope_history
@@ -35,7 +37,7 @@ class ModelSheetAdmin(admin.ModelAdmin):
             or type(self).get_search_results is not admin.ModelAdmin.get_search_results
         ):
             raise SheetError(
-                "admin_state_unsupported", "Admin search cannot be transferred exactly."
+                "admin_state_unsupported", _("Admin search cannot be transferred exactly.")
             )
         changelist = self.get_changelist_instance(request)
         result = []
@@ -43,13 +45,15 @@ class ModelSheetAdmin(admin.ModelAdmin):
         for name in changelist.get_ordering(request, changelist.queryset):
             if not isinstance(name, str):
                 raise SheetError(
-                    "admin_state_unsupported", "Expression ordering cannot be transferred."
+                    "admin_state_unsupported", _("Expression ordering cannot be transferred.")
                 )
             field = name.lstrip("-")
             if field == self.model._meta.pk.name:
                 field = "pk"
             if field != "pk" and field not in fields:
-                raise SheetError("admin_state_unsupported", "Ordering uses an unavailable field.")
+                raise SheetError(
+                    "admin_state_unsupported", _("Ordering uses an unavailable field.")
+                )
             if field not in seen:
                 result.append({"field": field, "dir": "desc" if name.startswith("-") else "asc"})
                 seen.add(field)
@@ -146,7 +150,7 @@ class ModelSheetAdmin(admin.ModelAdmin):
                     bits = [name, lookup]
             if len(bits) > 2 or lookup not in operators:
                 raise SheetError(
-                    "admin_state_unsupported", "This Admin filter cannot be transferred exactly."
+                    "admin_state_unsupported", _("This Admin filter cannot be transferred exactly.")
                 )
             require_fields([name], fields)
             conditions.append(
@@ -196,7 +200,7 @@ class ModelSheetAdmin(admin.ModelAdmin):
             fields = fields_for(request, self)
             if state["limit"] != self.list_per_page or state["offset"] % self.list_per_page:
                 raise SheetError(
-                    "admin_state_unsupported", "Admin and sheet page sizes must match."
+                    "admin_state_unsupported", _("Admin and sheet page sizes must match.")
                 )
             params = {"q": state["q"], "p": state["offset"] // self.list_per_page}
             tree = state["filter"]
@@ -209,16 +213,18 @@ class ModelSheetAdmin(admin.ModelAdmin):
                 ):
                     raise SheetError(
                         "admin_state_unsupported",
-                        "Remove complex filters before opening ordinary Admin.",
+                        _("Remove complex filters before opening ordinary Admin."),
                     )
                 name = item["field"]
                 if not self.lookup_allowed(f"{name}__exact", item["value"], request):
-                    raise SheetError("admin_state_unsupported", "Admin does not allow this filter.")
+                    raise SheetError(
+                        "admin_state_unsupported", _("Admin does not allow this filter.")
+                    )
                 key = f"{name}__exact"
                 if key in params:
                     raise SheetError(
                         "admin_state_unsupported",
-                        "Repeated conditions cannot be transferred exactly.",
+                        _("Repeated conditions cannot be transferred exactly."),
                     )
                 params[key] = item["value"]
             display = list(self.get_list_display(request))
@@ -230,7 +236,7 @@ class ModelSheetAdmin(admin.ModelAdmin):
                     continue
                 if item["field"] not in display or item["field"] not in fields:
                     raise SheetError(
-                        "admin_state_unsupported", "Admin cannot represent this ordering."
+                        "admin_state_unsupported", _("Admin cannot represent this ordering.")
                     )
                 order.append(
                     ("-" if item["dir"] == "desc" else "") + str(display.index(item["field"]))
@@ -244,7 +250,7 @@ class ModelSheetAdmin(admin.ModelAdmin):
                 effective.append({"field": "pk", "dir": "desc"})
             if effective != self.sheet_admin_ordering(candidate, fields):
                 raise SheetError(
-                    "admin_state_unsupported", "Admin cannot preserve the complete ordering."
+                    "admin_state_unsupported", _("Admin cannot preserve the complete ordering.")
                 )
             url = reverse(
                 f"{self.admin_site.name}:{self.model._meta.app_label}_{self.model._meta.model_name}_changelist"

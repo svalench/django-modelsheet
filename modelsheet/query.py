@@ -4,6 +4,8 @@ from copy import copy
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 
+from django.utils.translation import gettext_lazy as _
+
 from .conf import component, config
 from .errors import SheetError
 from .metadata import require_fields
@@ -28,17 +30,17 @@ def condition(tree, model, fields):
     def walk(node, depth=0):
         budget[0] -= 1
         if budget[0] < 0 or depth > config()["max_filter_depth"]:
-            raise SheetError("filter_limit", "Filter is too complex.")
+            raise SheetError("filter_limit", _("Filter is too complex."))
         if not isinstance(node, dict):
-            raise SheetError("invalid_filter", "Expected a filter object.")
+            raise SheetError("invalid_filter", _("Expected a filter object."))
         if not node:
             return Q()
         if "and" in node or "or" in node:
             if len(node) != 1:
-                raise SheetError("invalid_filter", "Use one group operator.")
+                raise SheetError("invalid_filter", _("Use one group operator."))
             key = "and" if "and" in node else "or"
             if not isinstance(node[key], list) or not node[key]:
-                raise SheetError("invalid_filter", "Filter group must contain conditions.")
+                raise SheetError("invalid_filter", _("Filter group must contain conditions."))
             result = None
             for child in node[key]:
                 expr = walk(child, depth + 1)
@@ -47,11 +49,11 @@ def condition(tree, model, fields):
                 )
             return result
         if set(node) != {"field", "op", "value"}:
-            raise SheetError("invalid_filter", "Expected field, op and value.")
+            raise SheetError("invalid_filter", _("Expected field, op and value."))
         name, op, value = node["field"], node["op"], node["value"]
         require_fields([name], fields)
         if op not in OPERATORS:
-            raise SheetError("invalid_filter", "Unsupported operator.")
+            raise SheetError("invalid_filter", _("Unsupported operator."))
         field = model._meta.get_field(name)
         adapter = component("field_adapter")
         try:
@@ -72,7 +74,7 @@ def condition(tree, model, fields):
             result = Q(**{f"{name}__{OPERATORS[op]}": value})
             return ~result if op in ("ne", "not_in") else result
         except (ValidationError, ValueError, TypeError, ArithmeticError):
-            raise SheetError("invalid_filter", "Invalid filter value.", field=name)
+            raise SheetError("invalid_filter", _("Invalid filter value."), field=name)
 
     return walk(tree)
 
@@ -82,17 +84,17 @@ def parse_offset(params):
     try:
         offset = max(0, int(params.get("offset", 0)))
     except (TypeError, ValueError):
-        raise SheetError("invalid_offset", "Offset must be an integer.")
+        raise SheetError("invalid_offset", _("Offset must be an integer."))
     if offset > config()["max_offset"]:
         raise SheetError(
-            "offset_limit", "Offset is too large; narrow the view with filters instead."
+            "offset_limit", _("Offset is too large; narrow the view with filters instead.")
         )
     return offset
 
 
 def parse_state(params):
     if not hasattr(params, "get"):
-        raise SheetError("invalid_state", "Invalid view state.")
+        raise SheetError("invalid_state", _("Invalid view state."))
     try:
         filters = params.get("filter", {})
         sort = params.get("sort", [])
@@ -108,14 +110,14 @@ def parse_state(params):
             "columns": json.loads(columns) if isinstance(columns, str) else columns,
         }
     except (TypeError, ValueError):
-        raise SheetError("invalid_state", "Invalid view state.")
+        raise SheetError("invalid_state", _("Invalid view state."))
 
 
 def queryset(request, admin, fields, state):
     qs = admin.get_queryset(request)
     if qs.db != "default":
         raise SheetError(
-            "database_unsupported", "Model sheets currently require the default database."
+            "database_unsupported", _("Model sheets currently require the default database.")
         )
     qs = qs.filter(condition(state["filter"], admin.model, fields))
     if state["q"]:
@@ -132,14 +134,14 @@ def queryset(request, admin, fields, state):
             qs = qs.none()
     ordering = []
     if not isinstance(state["sort"], list) or len(state["sort"]) > 10:
-        raise SheetError("invalid_sort", "Expected up to ten sort fields.")
+        raise SheetError("invalid_sort", _("Expected up to ten sort fields."))
     for item in state["sort"]:
         if (
             not isinstance(item, dict)
             or set(item) != {"field", "dir"}
             or item["dir"] not in ("asc", "desc")
         ):
-            raise SheetError("invalid_sort", "Expected field and asc/desc direction.")
+            raise SheetError("invalid_sort", _("Expected field and asc/desc direction."))
         if item["field"] != "pk":
             require_fields([item["field"]], fields)
         ordering.append(("-" if item["dir"] == "desc" else "") + item["field"])

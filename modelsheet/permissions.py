@@ -1,6 +1,8 @@
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
 
+from django.utils.translation import gettext_lazy as _
+
 from .conf import config
 from .errors import SheetError
 
@@ -48,14 +50,16 @@ def require_access(request, admin, *, change=False, action=None):
         and user.has_perm(f"{model._meta.app_label}.view_{model._meta.model_name}")
         and admin.has_view_permission(request)
     ):
-        raise SheetError("forbidden", "Sheet access denied.", status=403)
+        raise SheetError("forbidden", _("Sheet access denied."), status=403)
     if change and not (
         user.has_perm(f"{model._meta.app_label}.change_{model._meta.model_name}")
         and admin.has_change_permission(request)
     ):
-        raise SheetError("forbidden", "Change permission required.", status=403)
+        raise SheetError("forbidden", _("Change permission required."), status=403)
     if action and not allowed(user, action, model):
-        raise SheetError("forbidden", f"{action} permission required.", status=403)
+        raise SheetError(
+            "forbidden", _("%(action)s permission required.") % {"action": action}, status=403
+        )
 
 
 def create_permissions(sender, using="default", **kwargs):
