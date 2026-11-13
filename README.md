@@ -3,7 +3,7 @@
 Spreadsheet editing for explicitly registered Django Admin models: cell/range editing,
 local undo/redo, Decimal formulas, server-side filters, and previewed bulk changes.
 
-**Current release: 0.4.0** (0.3.0 was the first stable release). [Changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/django-modelsheet/)
+**Current release: 0.5.0** (0.3.0 was the first stable release). [Changelog](CHANGELOG.md) · [PyPI](https://pypi.org/project/django-modelsheet/)
 The repository includes a working demo, compiled assets, tests, and a compatibility CI matrix.
 
 **[Documentation website →](https://svalench.github.io/django-modelsheet/)** —
@@ -14,7 +14,7 @@ installation, examples, formulas, bulk operations and extension APIs in English,
 Install the stable release:
 
 ```sh
-pip install django-modelsheet==0.4.0
+pip install django-modelsheet==0.5.0
 ```
 
 ```python
@@ -53,6 +53,18 @@ use configured sheets immediately. Open **Spreadsheet** from the model list, or
 visit `/admin/shop/product/sheet/`. No frontend build, CDN or extra URL include is
 required in the consuming project. Admin's existing sessions and CSRF protection apply.
 
+## Upgrading to 0.5.0
+
+Run `migrate` (adds `SavedView`) and `collectstatic`, then restart and reload tabs.
+Optional extras: `pip install 'django-modelsheet[xlsx]'` and `'django-modelsheet[celery]'`.
+
+- Foreign keys show labels and edit through a permission-checked autocomplete. Many-to-many columns are read-only labels.
+- Create and delete rows in the sheet when the user has model add/delete permission. **Revert save** undoes the last save if fingerprints still match.
+- Export CSV of the filtered view (XLSX with the extra). Import CSV/XLSX through bulk preview.
+- Set `MODELSHEET["pagination"] = "keyset"` for cursor pages. The default stays offset.
+- Set `background_adapter` to `modelsheet.background.ThreadBackgroundAdapter`, `modelsheet.background.DjangoTasksBackgroundAdapter` (Django 6), or `modelsheet.contrib.celery_adapter.CeleryBackgroundAdapter` so bulk plans above 5000 rows leave the request. The default stays unset.
+- `modelsheet_roles` grants `undo`, and add/delete on the model, to Editor, Operator and Admin.
+
 ## Upgrading to 0.4.0
 
 No migrations. Install, run `collectstatic`, restart. Review these behaviour changes:
@@ -80,17 +92,18 @@ cancel/resume or settings changes. Pin `django-modelsheet==0.3.0`.
 
 ## Using the sheet
 
-- Double-click to edit; use the formula bar for a value or expression.
-- Changes stay local until **Save**. Ctrl/Cmd+Z, Ctrl/Cmd+Y and Ctrl/Cmd+S operate on this buffer.
-- Select a range, copy/paste TSV from Excel, or press Ctrl/Cmd+D to fill down.
+- Double-click, press F2, or type to edit. Booleans, dates, choices and foreign keys use their own editors. Decimals accept a comma.
+- Changes stay local until **Save**. Ctrl/Cmd+Z, Ctrl/Cmd+Y and Ctrl/Cmd+S operate on this buffer. **Revert save** undoes the last successful save on the server.
+- Select a range, copy/paste TSV from Excel, press Ctrl/Cmd+D to fill down, or Ctrl/Cmd+R to fill right. **Find** replaces text on the loaded page.
 - Readonly cells are skipped during paste with a notification. A save is atomic across all changed rows.
 - Use **Sort** for ordered sort fields, or Alt+click a column header (Alt+Shift+click adds a field).
   Ordinary header clicks select columns. Search and filters run on the server.
 - **Bulk change** selects either highlighted page rows or every matching row, including other pages.
   Build a preview, inspect its exact count/values, then confirm it. Editing inputs requires a new preview.
 - **Ordinary Admin** is available only when its list can represent the same filter, ordering and page.
+- **Add row** / **Delete rows** join the same atomic save. **Export** downloads the filtered view. **Import** previews a CSV or XLSX. **Views** keeps named filters locally and can share them.
 
-Numbers use a decimal point and dates use ISO 8601. Empty pasted cells become
+Decimals accept a point or a comma. Dates are shown in the active locale and stored as ISO 8601. Empty pasted cells become
 NULL for nullable fields, otherwise empty text for text fields or a validation error.
 Prefix text beginning with `=` with an apostrophe, for example `'=SUM(A1:A2)`.
 
@@ -111,7 +124,11 @@ MODELSHEET = {
     "max_operations_per_minute": 30,
     "max_snapshots_per_minute": 120,  # GET rows/ creates a snapshot; 429 above this
     "max_snapshots_per_user": 50,  # older snapshots of the user are pruned
-    "max_offset": 100000,  # deeper pages must be reached with filters
+    "max_offset": 100000,  # offset mode only; keyset ignores this cap
+    "max_export_rows": 100000,
+    "max_import_rows": 20000,
+    "max_import_bytes": 5000000,
+    "pagination": "offset",  # offset | keyset
     "history_scope": "all",  # all | own (see Permissions)
     "max_request_bytes": 1000000,
     "formula": {"max_length": 500, "max_depth": 10, "max_steps": 10000, "timeout_ms": 250},
@@ -160,6 +177,7 @@ modelsheet.view_field_shop_product_price
 modelsheet.edit_field_shop_product_price
 modelsheet.bulk_shop_product
 modelsheet.history_shop_product
+modelsheet.undo_shop_product
 ```
 
 Readonly fields are checked twice: `get_readonly_fields(request)` shapes the schema,
@@ -221,9 +239,10 @@ normal model signals. Custom `ModelAdmin.save_model()`, custom Admin forms,
 cover concrete model fields, not all intermediate history or related-table contents.
 
 Sheets use the `default` database. User models require no extra fields or inheritance.
-Existing scalar fields are editable; FK fields can be displayed/filtered but FK/M2M
-editors, server undo, file import/export, fast-save, cursor pagination and persistent
-formulas are deferred. Large operations require your own background adapter.
+Foreign keys edit through autocomplete; many-to-many columns are read-only labels.
+Create, delete and server undo of the last save are in the sheet. CSV export is
+built in; XLSX needs the optional extra. Keyset pagination and the built-in
+background adapters are opt-in. Fast-save and persistent formulas remain deferred.
 
 See [formulas](docs/formulas.md), [extension API](docs/extensions.md),
 [background processing](docs/background.md), [HTTP API](docs/api.md), and

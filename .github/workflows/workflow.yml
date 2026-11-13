@@ -56,3 +56,22 @@ jobs:
           path: dist/
       - name: Publish using PyPI Trusted Publishing
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  release-assets:
+    name: Attach distributions to the GitHub release
+    needs: [metadata, validate]
+    if: github.event_name == 'release' && github.repository == 'svalench/django-modelsheet'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pypi-distributions
+          path: dist/
+      - name: Write SHA256SUMS
+        run: cd dist && sha256sum -- * > SHA256SUMS
+      - name: Attach wheel, sdist and checksums
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*

@@ -18,6 +18,10 @@ MODELSHEET = {
     "history_retention_days": 365,
     "max_operations_per_minute": 30,
     "max_request_bytes": 1000000,
+    "max_export_rows": 100000,
+    "max_import_rows": 20000,
+    "max_import_bytes": 5000000,
+    "pagination": "offset",
     "formula": {
         "max_length": 500, "max_depth": 10,
         "max_steps": 10000, "timeout_ms": 250,
@@ -34,9 +38,12 @@ MODELSHEET = {
 | `max_save_rows` | `500` | Maximum rows per ordinary save |
 | `count_mode` | `"exact"` | `exact` or `none`; none omits COUNT |
 | `max_request_bytes` | `1000000` | Request size cap |
+| `max_export_rows` | `100000` | Rows in one CSV/XLSX export |
+| `max_import_rows` / `max_import_bytes` | `20000` / `5000000` | Import table and upload caps |
+| `pagination` | `"offset"` | `"offset"` or `"keyset"` |
 | `snapshot_ttl_seconds` | `1800` | Snapshot lifetime |
 
-Pagination is offset/limit. Cursor pagination and approximate counts are not included.
+`pagination` is `"offset"` (default, capped by `max_offset`) or `"keyset"`. Keyset pages ignore the offset cap and keep a stable sort, with nulls last. `count_mode: "none"` omits the exact count; there is no approximate count.
 
 ## Operations and history
 

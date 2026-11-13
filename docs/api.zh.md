@@ -4,9 +4,9 @@
 
 ## 读取数据
 
-`GET schema/` 返回可见字段、可编辑性、安全的虚拟列和功能信息。
+`GET schema/` 返回可见字段、可编辑性、安全的虚拟列，以及 `can_add`、`can_delete`、`can_undo`、`can_import`、`pagination` 和是否安装了 XLSX。
 
-`GET rows/` 接受 `q`、JSON `filter`、JSON `sort`、`offset`、`limit` 和 JSON `columns`（可见字段顺序）。响应包括 `{pk,version,values}` 行、snapshot、规范化状态、UTC today、count（或 null）和 has_next。
+`GET rows/` 接受 `q`、JSON `filter`、JSON `sort`、`offset`、`limit`、JSON `columns`，键集模式还有 `pagination=keyset` 和 `cursor`。响应包括 `{pk,version,values,labels}` 行、snapshot、规范化状态、UTC today、count（或 null）、has_next 和 next_cursor。关系字段在 `values` 中保留主键，在 `labels` 中保留显示文本。隐藏对象不进入页面和计数。
 
 ```json title="筛选示例"
 {"and":[{"field":"stock","op":"lt","value":10},{"field":"status","op":"eq","value":"ready"}]}

@@ -1,6 +1,22 @@
 # Фонавыя заданні
 
-Пакет утрымлівае пункт уваходу worker і захаваны стан аперацый. Чарга, broker, планавальнік і залежнасць Celery падключаюцца праектам. Без адаптара аперацыі звыш `bulk_background_threshold` адхіляюцца да пабудовы плана.
+Пакет утрымлівае пункт уваходу worker і захаваны стан аперацый. `background_adapter` па змаўчанні не зададзены, таму аперацыі звыш `bulk_background_threshold` адхіляюцца да пабудовы плана, пакуль адаптар не абраны.
+
+Неабавязковыя ўбудаваныя адаптары:
+
+| Адаптар | Шлях | Калі |
+| --- | --- | --- |
+| Паток | `modelsheet.background.ThreadBackgroundAdapter` | Без дадатковых службаў. Праца ідзе ў дэман-патоку і не перажывае рэстарт; працяг пасля заканчэння lease. |
+| Django tasks | `modelsheet.background.DjangoTasksBackgroundAdapter` | Django 6+ `django.tasks`. `ImmediateBackend` выконвае задачу ўнутры `enqueue`. |
+| Celery | `modelsheet.contrib.celery_adapter.CeleryBackgroundAdapter` | Усталюйце `django-modelsheet[celery]`, імпартуйце модуль у воркеры і пакажыце клас у наладзе. Імя задачы — `modelsheet.process_operation`. |
+
+```python
+MODELSHEET = {
+    "background_adapter": "modelsheet.background.ThreadBackgroundAdapter",
+}
+```
+
+Кантэкст арандатара па-ранейшаму належыць адаптару праекта. Без адаптара аперацыі звыш парога адхіляюцца да пабудовы плана.
 
 ## Адаптар праекта
 

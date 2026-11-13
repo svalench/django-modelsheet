@@ -17,10 +17,10 @@ python manage.py modelsheet_roles
 | Група | Магчымасці |
 | --- | --- |
 | ModelSheet Viewer | Чытанне табліц |
-| ModelSheet Editor | Чытанне і рэдагаванне |
-| ModelSheet Operator | Рэдагаванне, масавыя аперацыі і гісторыя |
+| ModelSheet Editor | Чытанне, рэдагаванне, дадаванне, выдаленне і адмена апошняга захавання |
+| ModelSheet Operator | Рэдагаванне, дадаванне, выдаленне, адмена, масавыя аперацыі і гісторыя |
 | ModelSheet Auditor | Чытанне і гісторыя |
-| ModelSheet Admin | Магчымасці пакета, без статусу superuser |
+| ModelSheet Admin | Магчымасці пакета, уключна з адменай, дадаваннем і выдаленнем; без superuser |
 
 Шаблоны дазваляюць настроеныя палі. Перад прызначэннем праверце адчувальныя калонкі. Паўтор дадае дазволы, не выдаляючы праектныя.
 
@@ -31,6 +31,7 @@ modelsheet.view_field_shop_product_price
 modelsheet.edit_field_shop_product_price
 modelsheet.bulk_shop_product
 modelsheet.history_shop_product
+modelsheet.undo_shop_product
 ```
 
 Правы поля не даюць права рэдагаваць мадэль. Схаваныя палі недаступныя для пошуку, фільтраў, парадку, формул і гісторыі. Уласная `PermissionPolicy` дадаткова звужае доступ.

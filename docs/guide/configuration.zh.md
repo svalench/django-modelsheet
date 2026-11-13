@@ -18,6 +18,10 @@ MODELSHEET = {
     "history_retention_days": 365,
     "max_operations_per_minute": 30,
     "max_request_bytes": 1000000,
+    "max_export_rows": 100000,
+    "max_import_rows": 20000,
+    "max_import_bytes": 5000000,
+    "pagination": "offset",
     "formula": {
         "max_length": 500, "max_depth": 10,
         "max_steps": 10000, "timeout_ms": 250,
@@ -34,9 +38,12 @@ MODELSHEET = {
 | `max_save_rows` | `500` | 普通保存的最大行数 |
 | `count_mode` | `"exact"` | `exact` 或 `none`；后者不执行 COUNT |
 | `max_request_bytes` | `1000000` | 请求大小上限 |
+| `max_export_rows` | `100000` | 一次 CSV/XLSX 导出的行数 |
+| `max_import_rows` / `max_import_bytes` | `20000` / `5000000` | 导入行数和上传大小上限 |
+| `pagination` | `"offset"` | `"offset"` 或 `"keyset"` |
 | `snapshot_ttl_seconds` | `1800` | 快照有效秒数 |
 
-采用 offset/limit 分页；不含游标分页或估算计数。
+`pagination` 默认为 `"offset"`（受 `max_offset` 限制），也可设为 `"keyset"`。键集分页忽略偏移上限，并保持稳定排序，空值排在最后。`count_mode: "none"` 不返回精确计数；没有估算计数。
 
 ## 操作与历史
 
