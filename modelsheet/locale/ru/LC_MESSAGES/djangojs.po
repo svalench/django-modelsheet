@@ -186,3 +186,153 @@ msgstr "Ожидает"
 
 msgid "dispatch_failed"
 msgstr "Ошибка очереди"
+
+msgid "Formula"
+msgstr "Формула"
+
+msgid "Value / comma-separated list"
+msgstr "Значение или список через запятую"
+
+msgid "Paste exceeds configured limits"
+msgstr "Вставка превышает заданные пределы"
+
+msgid "AND"
+msgstr "И"
+
+msgid "OR"
+msgstr "ИЛИ"
+
+msgid "Equals"
+msgstr "Равно"
+
+msgid "Does not equal"
+msgstr "Не равно"
+
+msgid "Less than"
+msgstr "Меньше"
+
+msgid "Less or equal"
+msgstr "Меньше или равно"
+
+msgid "Greater than"
+msgstr "Больше"
+
+msgid "Greater or equal"
+msgstr "Больше или равно"
+
+msgid "In list"
+msgstr "В списке"
+
+msgid "Not in list"
+msgstr "Не в списке"
+
+msgid "Is empty"
+msgstr "Пусто"
+
+msgid "Contains"
+msgstr "Содержит"
+
+msgid "Export"
+msgstr "Экспорт"
+
+msgid "Import"
+msgstr "Импорт"
+
+msgid "Add row"
+msgstr "Добавить строку"
+
+msgid "Delete rows"
+msgstr "Удалить строки"
+
+msgid "Revert save"
+msgstr "Откатить сохранение"
+
+msgid "Find"
+msgstr "Найти"
+
+msgid "Replace"
+msgstr "Заменить"
+
+msgid "Fill right"
+msgstr "Заполнить вправо"
+
+msgid "Views"
+msgstr "Представления"
+
+msgid "Save view"
+msgstr "Сохранить вид"
+
+msgid "Shared"
+msgstr "Общий"
+
+msgid "Apply view"
+msgstr "Открыть вид"
+
+msgid "Yes"
+msgstr "Да"
+
+msgid "No"
+msgstr "Нет"
+
+msgid "Required"
+msgstr "Обязательное поле"
+
+msgid "Too long"
+msgstr "Слишком длинное значение"
+
+msgid "Invalid number"
+msgstr "Нужно число"
+
+msgid "Invalid integer"
+msgstr "Нужно целое число"
+
+msgid "Invalid date"
+msgstr "Нужна дата"
+
+msgid "Invalid time"
+msgstr "Нужно время"
+
+msgid "Invalid value"
+msgstr "Некорректное значение"
+
+msgid "Match case"
+msgstr "Учитывать регистр"
+
+msgid "Replace all"
+msgstr "Заменить все"
+
+msgid "View name"
+msgstr "Название вида"
+
+msgid "Local views"
+msgstr "Локальные виды"
+
+msgid "Shared views"
+msgstr "Общие виды"
+
+msgid "Delete view"
+msgstr "Удалить вид"
+
+msgid "Map columns"
+msgstr "Сопоставление колонок"
+
+msgid "Preview import"
+msgstr "Предпросмотр импорта"
+
+msgid "Choose file"
+msgstr "Выбрать файл"
+
+msgid "Reverted"
+msgstr "Откат выполнен"
+
+msgid "New row"
+msgstr "Новая строка"
+
+msgid "Empty value"
+msgstr "Пустое значение"
+
+msgid "XLSX"
+msgstr "XLSX"
+
+msgid "CSV"
+msgstr "CSV"

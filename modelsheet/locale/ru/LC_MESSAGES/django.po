@@ -248,3 +248,6 @@ msgstr "Некорректный запрос."
 
 msgid "Database unavailable or busy; retry with the same key."
 msgstr "База данных недоступна или занята; повторите с тем же ключом."
+
+msgid "Model sheet unavailable"
+msgstr "Таблица модели недоступна"
