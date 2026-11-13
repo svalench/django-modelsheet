@@ -65,4 +65,5 @@ def test_upgrade_preserves_audit_data_and_expires_legacy_unconfirmed_plans(user)
             else:
                 assert op.preview_expires_at <= timezone.now()
     finally:
-        MigrationExecutor(connection).migrate(new_target)
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())

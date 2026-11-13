@@ -17,6 +17,22 @@ def serialize(value):
     return str(value)
 
 
+def normalize_number_text(value):
+    """Принимает десятичную запятую и пробелы: ``1 234,56`` и ``1,234.56``."""
+    if not isinstance(value, str):
+        return value
+    text = value.strip().replace("\u00a0", "").replace(" ", "")
+    if "," in text and "." in text:
+        if text.rfind(",") > text.rfind("."):
+            return text.replace(".", "").replace(",", ".")
+        return text.replace(",", "")
+    if text.count(",") == 1:
+        return text.replace(",", ".")
+    if text.count(",") > 1:
+        return text.replace(",", "")
+    return text
+
+
 class FieldAdapter:
     def supported(self, field):
         return (
@@ -33,16 +49,32 @@ class FieldAdapter:
                     models.TimeField,
                     models.UUIDField,
                     models.ForeignKey,
+                    models.ManyToManyField,
                 ),
             )
             and not field.primary_key
         )
 
     def editable(self, field):
-        return self.supported(field) and field.editable and not isinstance(field, models.ForeignKey)
+        # M2M только показывается: правка связи остаётся в обычной форме Admin.
+        if isinstance(field, models.ManyToManyField):
+            return False
+        return self.supported(field) and field.editable
 
     def serialize(self, field, instance):
+        if field.many_to_many:
+            # prefetch_related сохраняется, если читать .all(), а не values_list().
+            return [serialize(related.pk) for related in getattr(instance, field.name).all()]
         return serialize(field.value_from_object(instance))
+
+    def display(self, field, instance):
+        """Подпись связанного объекта. Не подменяет PK в values: сохранение шлёт ключ."""
+        if field.many_to_one:
+            related = getattr(instance, field.name)
+            return None if related is None else str(related)
+        if field.many_to_many:
+            return [str(related) for related in getattr(instance, field.name).all()]
+        return None
 
     def parse(self, field, value):
         if isinstance(value, (dict, list)):
@@ -58,6 +90,8 @@ class FieldAdapter:
                 value = True
             elif value.lower() in ("false", "0"):
                 value = False
+        if isinstance(field, (models.DecimalField, models.FloatField)):
+            value = normalize_number_text(value)
         if isinstance(field, models.DecimalField):
             value = Decimal(str(value))
             if not value.is_finite():
@@ -89,13 +123,22 @@ class FieldAdapter:
         return value
 
     def metadata(self, field):
-        return {
+        data = {
             "name": field.name,
             "label": str(field.verbose_name),
             "type": field.get_internal_type(),
             "nullable": field.null,
-            "choices": [[serialize(k), str(v)] for k, v in field.flatchoices],
+            "blank": field.blank,
+            "choices": [[serialize(key), str(label)] for key, label in field.flatchoices],
+            "max_length": field.max_length
+            if isinstance(field, (models.CharField, models.TextField))
+            else None,
+            "related": bool(field.is_relation and (field.many_to_one or field.many_to_many)),
         }
+        if isinstance(field, models.DecimalField):
+            data["max_digits"] = field.max_digits
+            data["decimal_places"] = field.decimal_places
+        return data
 
 
 class SaveAdapter:

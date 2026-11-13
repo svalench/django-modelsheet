@@ -52,6 +52,30 @@ class Operation(models.Model):
         return f"{self.kind} {self.model_label} {self.pk}"
 
 
+class SavedView(models.Model):
+    """Именованное состояние листа. shared виден всем, кто может открыть модель."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    name = models.CharField(max_length=80)
+    model_label = models.CharField(max_length=200)
+    site_name = models.CharField(max_length=100)
+    shared = models.BooleanField(default=False)
+    state = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "site_name", "model_label", "name"],
+                name="modelsheet_saved_view",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.model_label}: {self.name}"
+
+
 class OperationItem(models.Model):
     operation = models.ForeignKey(Operation, on_delete=models.CASCADE, related_name="items")
     pk_value = models.CharField(max_length=255)

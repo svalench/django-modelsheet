@@ -30,6 +30,9 @@ def check_configuration(app_configs, **kwargs):
             "max_snapshots_per_minute",
             "max_snapshots_per_user",
             "max_offset",
+            "max_export_rows",
+            "max_import_rows",
+            "max_import_bytes",
             "snapshot_ttl_seconds",
             "preview_ttl_seconds",
         ):
@@ -39,6 +42,8 @@ def check_configuration(app_configs, **kwargs):
             errors.append(Error("history_scope must be all or own", id="modelsheet.E009"))
         if settings["count_mode"] not in ("exact", "none"):
             errors.append(Error("count_mode must be exact or none", id="modelsheet.E003"))
+        if settings["pagination"] not in ("offset", "keyset"):
+            errors.append(Error("pagination must be offset or keyset", id="modelsheet.E003"))
         if settings["page_size"] > settings["max_page_size"]:
             errors.append(Error("page_size exceeds max_page_size", id="modelsheet.E002"))
         for key in ("field_adapter", "save_adapter", "permission_policy", "background_adapter"):
@@ -68,7 +73,13 @@ def check_configuration(app_configs, **kwargs):
                         )
                     try:
                         field = model._meta.get_field(name)
-                        if not field.concrete or field.many_to_many:
+                        if field.many_to_many:
+                            if name in admin.sheet_editable or not component(
+                                "field_adapter"
+                            ).supported(field):
+                                raise FieldDoesNotExist()
+                            continue
+                        if not field.concrete:
                             raise FieldDoesNotExist()
                         if name in admin.sheet_editable and not component("field_adapter").editable(
                             field

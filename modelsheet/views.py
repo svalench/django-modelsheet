@@ -5,16 +5,18 @@ from django.db import OperationalError
 from django.http import JsonResponse
 from django.utils.translation import gettext_lazy as _
 
-from . import bulk, services
+from . import bulk, services, transfer
 from .conf import config
 from .errors import SheetError
 from .models import Operation
 from .permissions import scope_history
 from .query import parse_offset
 
+GET_ACTIONS = ("schema", "rows", "operation", "history", "lookup", "views", "export")
+
 
 def endpoint(request, admin, action, operation_id=None):
-    expected = "GET" if action in ("schema", "rows", "operation", "history") else "POST"
+    expected = "GET" if action in GET_ACTIONS else "POST"
     if request.method != expected:
         response = JsonResponse(
             {
@@ -40,8 +42,24 @@ def endpoint(request, admin, action, operation_id=None):
             data = services.schema(request, admin)
         elif action == "rows":
             data = services.rows(request, admin, request.GET)
+        elif action == "lookup":
+            data = services.lookup(request, admin, request.GET)
+        elif action == "views":
+            data = services.saved_views(request, admin)
+        elif action == "export":
+            response = transfer.export_table(request, admin, request.GET)
+            response["Cache-Control"] = "no-store"
+            return response
         elif action == "save":
             data = services.save(request, admin, payload)
+        elif action == "validate":
+            data = services.validate_draft(request, admin, payload)
+        elif action == "undo":
+            data = services.undo(request, admin, payload)
+        elif action == "save_view":
+            data = services.save_view(request, admin, payload)
+        elif action == "delete_view":
+            data = services.delete_view(request, admin, payload)
         elif action == "preview":
             data = bulk.preview(request, admin, payload)
         elif action == "run":
@@ -92,6 +110,48 @@ def endpoint(request, admin, action, operation_id=None):
                 }
             },
             status=503,
+        )
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+def import_endpoint(request, admin):
+    if request.method != "POST":
+        response = JsonResponse(
+            {"error": {"code": "method_not_allowed", "message": _("Use POST.")}}, status=405
+        )
+        response["Allow"] = "POST"
+        return response
+    try:
+        upload = request.FILES.get("file")
+        if upload is None:
+            raise SheetError("invalid_import", _("Import file is empty."))
+        table = transfer.read_table(upload)
+        phase = request.POST.get("phase", "preview")
+        if phase == "inspect":
+            headers = [str(cell).strip() for cell in table[0]] if table else []
+            data = {
+                "headers": headers,
+                "sample": table[1:6],
+                "rows": max(0, len(table) - 1),
+            }
+        else:
+            mapping = json.loads(request.POST.get("mapping") or "{}")
+            records = transfer.records_from_table(table, mapping, admin.model)
+            data = bulk.import_preview(
+                request,
+                admin,
+                {
+                    "idempotency_key": request.POST.get("idempotency_key"),
+                    "rows": records,
+                },
+            )
+        response = JsonResponse(data)
+    except SheetError as exc:
+        response = JsonResponse({"error": exc.as_dict()}, status=exc.status)
+    except (json.JSONDecodeError, UnicodeDecodeError, ValidationError):
+        response = JsonResponse(
+            {"error": {"code": "invalid_request", "message": _("Malformed request.")}}, status=400
         )
     response["Cache-Control"] = "no-store"
     return response
