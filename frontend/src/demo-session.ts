@@ -20,7 +20,7 @@ export class DemoSession {
     this.buffer = new EditBuffer(structuredClone(this.initial), demoColumns, new Set(demoColumns), today);
   }
   get changedCells() { return Object.values(this.buffer.changes).reduce((n, row) => n + Object.keys(row).length, 0); }
-  reset() { this.buffer.rows = structuredClone(this.initial); this.buffer.clear(); }
+  reset() { this.buffer.commit(structuredClone(this.initial)); }
   value(pk: string, field: string): any {
     const value = this.buffer.value(pk, field);
     if (field === 'price' || field === 'stock') {
@@ -50,8 +50,7 @@ export class DemoSession {
       values.price = values.price.toFixed(2);
       return {...row, values};
     });
-    this.buffer.rows = rows;
-    this.buffer.clear();
+    this.buffer.commit(rows);
   }
   preset(kind: string) {
     if (!['markup', 'status', 'average'].includes(kind)) throw new FormulaError('#NAME?');

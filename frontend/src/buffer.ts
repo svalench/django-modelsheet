@@ -1,6 +1,6 @@
 import {coordinates, evaluate, FormulaError, parse, references} from './formula';
 
-export interface Row {pk: string; version: string; values: Record<string, any>}
+export interface Row {pk: string; version: string; values: Record<string, any>; labels?: Record<string, any>}
 type Changes = Record<string, Record<string, any>>;
 const emptyChanges = (): Changes => Object.create(null);
 // structuredClone does not retain null prototypes. Rebuild both dictionaries so
@@ -13,12 +13,37 @@ const copy = (value: Changes): Changes => {
   return result;
 };
 
+type Memory = {changes: Changes; rows: Row[]; deleted: Record<string, true>};
+const cloneRow = (row: Row): Row => ({
+  pk: row.pk, version: row.version, values: {...row.values},
+  labels: row.labels ? structuredClone(row.labels) : undefined,
+});
+const copyFlags = (flags: Record<string, true>) => {
+  const result: Record<string, true> = Object.create(null);
+  for (const key of Object.keys(flags)) result[key] = true;
+  return result;
+};
+
 export class EditBuffer {
   changes: Changes = emptyChanges();
-  private past: Changes[] = [];
-  private future: Changes[] = [];
-  constructor(public rows: Row[], public columns: string[], public editable: Set<string>, public today: string) {}
-  get dirty() { return Object.keys(this.changes).length > 0; }
+  deleted: Record<string, true> = Object.create(null);
+  private past: Memory[] = [];
+  private future: Memory[] = [];
+  private initialRows: Row[];
+  constructor(public rows: Row[], public columns: string[], public editable: Set<string>, public today: string) {
+    this.initialRows = rows.map(cloneRow);
+    this.rows = rows.map(cloneRow);
+  }
+  get dirty() {
+    return Object.keys(this.changes).length > 0 || Object.keys(this.deleted).length > 0 || this.rows.some(row => row.pk.startsWith('new:'));
+  }
+  private memory(): Memory {
+    return {changes: copy(this.changes), rows: this.rows.map(cloneRow), deleted: copyFlags(this.deleted)};
+  }
+  private remember() { this.past.push(this.memory()); this.future = []; }
+  private restore(memory: Memory) {
+    this.changes = memory.changes; this.rows = memory.rows; this.deleted = memory.deleted;
+  }
   raw(pk: string, field: string) {
     return Object.hasOwn(this.changes[pk] ?? {}, field) ? this.changes[pk][field] : this.rows.find(row => row.pk === pk)?.values[field];
   }
@@ -31,7 +56,7 @@ export class EditBuffer {
     let skipped = 0;
     for (const edit of edits) {
       const row = this.rows.find(row => row.pk === edit.pk);
-      if (!row || !this.editable.has(edit.field)) { skipped++; continue; }
+      if (!row || !this.editable.has(edit.field) || this.deleted[edit.pk]) { skipped++; continue; }
       next[edit.pk] ??= Object.create(null);
       const original = row.values[edit.field];
       // Input editors return strings even when JSON supplied a number/bool/null.
@@ -45,14 +70,50 @@ export class EditBuffer {
       if (!Object.keys(next[edit.pk]).length) delete next[edit.pk];
     }
     if (JSON.stringify(next) !== JSON.stringify(this.changes)) {
-      this.past.push(copy(this.changes)); this.future = []; this.changes = next;
+      this.remember(); this.changes = next;
     }
     return skipped;
   }
-  undo() { if (this.past.length) { this.future.push(copy(this.changes)); this.changes = this.past.pop()!; } }
-  redo() { if (this.future.length) { this.past.push(copy(this.changes)); this.changes = this.future.pop()!; } }
-  clear() { this.changes = emptyChanges(); this.past = []; this.future = []; }
-  payload() { return Object.entries(this.changes).map(([pk, values]) => ({pk, values, version: this.rows.find(row => row.pk === pk)!.version})); }
+  addRow(values: Record<string, any>) {
+    const pk = `new:${crypto.randomUUID()}`;
+    this.remember();
+    this.rows = [...this.rows, {pk, version: '', values: {...values}}];
+    return pk;
+  }
+  removeRows(pks: string[]) {
+    this.remember();
+    for (const pk of pks) {
+      if (String(pk).startsWith('new:')) {
+        this.rows = this.rows.filter(row => row.pk !== pk);
+        delete this.changes[pk];
+      } else if (this.rows.some(row => row.pk === pk)) this.deleted[pk] = true;
+    }
+  }
+  undo() { if (this.past.length) { this.future.push(this.memory()); this.restore(this.past.pop()!); } }
+  redo() { if (this.future.length) { this.past.push(this.memory()); this.restore(this.future.pop()!); } }
+  clear() {
+    this.changes = emptyChanges(); this.past = []; this.future = [];
+    this.rows = this.initialRows.map(cloneRow); this.deleted = Object.create(null);
+  }
+  /** Зафиксировать строки как новую базу: clear() больше не откатит их. */
+  commit(rows: Row[]) {
+    this.rows = rows.map(cloneRow);
+    this.initialRows = this.rows.map(cloneRow);
+    this.clear();
+  }
+  payload() {
+    return Object.entries(this.changes)
+      .filter(([pk]) => !String(pk).startsWith('new:') && !this.deleted[pk])
+      .map(([pk, values]) => ({pk, values, version: this.rows.find(row => row.pk === pk)!.version}));
+  }
+  saveParts() {
+    const creates = this.rows.filter(row => row.pk.startsWith('new:')).map(row => ({
+      temp_id: row.pk,
+      values: {...row.values, ...(this.changes[row.pk] ?? {})},
+    }));
+    const deletes = Object.keys(this.deleted).map(pk => ({pk, version: this.rows.find(row => row.pk === pk)!.version}));
+    return {changes: this.payload(), creates, deletes};
+  }
   value(pk: string, field: string): any {
     const visiting = new Set<string>(), cache = new Map<string, any>();
     const calculate = (id: string, name: string): any => {

@@ -27,19 +27,37 @@ test('edit with formula, undo, save and reload', async ({page}) => {
   await expect(page.getByRole('button', {name:'Save', exact:true})).toBeDisabled();
 });
 
-test('clipboard paste skips readonly FK and undo preserves originals', async ({page}) => {
+test('clipboard paste skips readonly M2M and shows FK labels', async ({page}) => {
   const category = page.locator('.tabulator-row').first().locator('[tabulator-field=category]');
-  const initial = await category.textContent();
-  await category.click();
-  // Dispatch the real clipboard event in the test browser, with two adjacent cells.
+  await expect(category).toHaveText('Consumables');
+  const tags = page.locator('.tabulator-row').first().locator('[tabulator-field=tags]');
+  await tags.click();
   await page.evaluate(() => {
-    const data = new DataTransfer(); data.setData('text/plain', '999\tfalse');
-    document.querySelector('.tabulator-row [tabulator-field=category]')!.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,clipboardData:data}));
+    const data = new DataTransfer(); data.setData('text/plain', '999');
+    document.querySelector('.tabulator-row [tabulator-field=tags]')!.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,clipboardData:data}));
   });
   await expect(page.locator('span[role=status]')).toContainText('Readonly cells skipped');
-  await expect(category).toHaveText(initial!);
+  await expect(tags).toHaveText('');
   await page.getByRole('button', {name:'Undo', exact:true}).click();
   await expect(page.getByRole('button', {name:'Save', exact:true})).toBeDisabled();
+});
+
+test('search button, friendly filters and F2', async ({page}) => {
+  await Promise.all([
+    page.waitForResponse(response => response.url().includes('/rows/') && response.ok()),
+    page.getByRole('button', {name:'Search', exact:true}).click(),
+  ]);
+  await expect(page.locator('span[role=status]')).toHaveText('Ready');
+  await page.getByRole('button', {name:'Filters', exact:true}).click();
+  const dialog = page.locator('dialog');
+  await dialog.getByRole('button', {name:'Add condition', exact:true}).click();
+  await expect(dialog.locator('select').nth(2)).toContainText('Equals');
+  await dialog.getByRole('button', {name:'Close', exact:true}).click();
+  const price = page.locator('.tabulator-row').first().locator('[tabulator-field=price]');
+  await price.click();
+  await page.keyboard.press('F2');
+  await expect(price.locator('input')).toBeVisible();
+  await page.keyboard.press('Escape');
 });
 
 test('preview and confirm bulk operation without touching excluded rows', async ({page}) => {
