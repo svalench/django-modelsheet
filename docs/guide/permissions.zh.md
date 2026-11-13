@@ -17,10 +17,10 @@ python manage.py modelsheet_roles
 | 组 | 能力 |
 | --- | --- |
 | ModelSheet Viewer | 读取表格 |
-| ModelSheet Editor | 读取与编辑 |
-| ModelSheet Operator | 编辑、批量操作与历史 |
+| ModelSheet Editor | 读取、编辑、新增、删除，以及撤销上次保存 |
+| ModelSheet Operator | 编辑、新增、删除、撤销、批量操作与历史 |
 | ModelSheet Auditor | 读取与历史 |
-| ModelSheet Admin | 软件包功能，不授予 superuser |
+| ModelSheet Admin | 软件包功能，含撤销、新增和删除；不授予 superuser |
 
 组模板授权已配置字段；分配前请检查敏感列。重复执行只追加权限，不删除项目自定义授权。
 
@@ -31,6 +31,7 @@ modelsheet.view_field_shop_product_price
 modelsheet.edit_field_shop_product_price
 modelsheet.bulk_shop_product
 modelsheet.history_shop_product
+modelsheet.undo_shop_product
 ```
 
 字段权限不授予模型级编辑权限。隐藏字段不可用于搜索、筛选、排序、公式或历史。自定义 `PermissionPolicy` 可进一步收紧访问。

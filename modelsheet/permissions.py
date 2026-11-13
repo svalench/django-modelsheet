@@ -28,6 +28,24 @@ class PermissionPolicy:
     def can_edit_object(self, request, admin, obj):
         return admin.has_change_permission(request, obj)
 
+    def can_delete_object(self, request, admin, obj):
+        model = admin.model
+        return request.user.has_perm(
+            f"{model._meta.app_label}.delete_{model._meta.model_name}"
+        ) and admin.has_delete_permission(request, obj)
+
+    def restrict_queryset(self, request, admin, queryset):
+        """SQL-фильтр видимых строк. По умолчанию не сужает выборку.
+
+        Переопределите, если объектные права выражаются запросом. Иначе лист
+        обходит строки и пропускает скрытые, чтобы count и страницы совпадали.
+        """
+        return queryset
+
+    # Снимки исходных методов: monkeypatch класса не должен отключать построчный обход.
+    default_can_view_object = can_view_object
+    default_restrict_queryset = restrict_queryset
+
 
 def can_view_all_history(user):
     """Whether ``user`` may see operations of other users (see ``history_scope``)."""

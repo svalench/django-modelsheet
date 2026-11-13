@@ -3,12 +3,15 @@ import 'tabulator-tables/dist/css/tabulator.min.css';
 import './style.css';
 import './grid-editors.css';
 import {watchActiveCell} from './grid-selection';
-import {EditBuffer, encodeTSV, parseTSV, Row} from './buffer';
+import {EditBuffer, encodeTSV, parseTSV} from './buffer';
+import {fillRightEdits, findReplaceEdits} from './edits';
+import {FILTER_OPERATORS, describeFilter} from './filters';
 import {columnName, evaluate, FormulaError, parse, translateFormula} from './formula';
 import {translator} from './i18n';
+import {validateCell} from './validate';
 
-type Field = {name: string; label: string; type: string; editable: boolean; choices: [any, string][]; formula?: string};
-type State = {q: string; filter: any; sort: {field: string; dir: string}[]; offset: number; limit: number; columns: string[] | null};
+type Field = {name: string; label: string; type: string; editable: boolean; nullable?: boolean; blank?: boolean; max_length?: number | null; related?: boolean; choices: [any, string][]; formula?: string};
+type State = {q: string; filter: any; sort: {field: string; dir: string}[]; offset: number; limit: number; columns: string[] | null; pagination?: string; cursor?: string | null};
 const initial = document.getElementById('modelsheet-state');
 if (initial) void start().catch(error => {
   const app = document.getElementById('modelsheet-app');
@@ -48,6 +51,11 @@ async function start() {
   let copied: {text: string; row: number; col: number; snapshot: string} | null = null;
   const errors = new Map<string, string>();
   const conflicts = new Set<string>(), savedCells = new Set<string>();
+  const labels = new Map<string, string>();
+  let pendingKey = '';
+  let nextCursor: string | null = null;
+  const cursorStack: (string | null)[] = [state.cursor ?? null];
+  let validateTimer = 0;
   const element = <K extends keyof HTMLElementTagNameMap>(tag: K, text = '', className = '') => {
     const node = document.createElement(tag); node.textContent = text; node.className = className; return node;
   };
@@ -60,11 +68,22 @@ async function start() {
   button('Undo', () => { buffer.undo(); render(); }, toolbar);
   button('Redo', () => { buffer.redo(); render(); }, toolbar);
   button('Fill down', fillDown, toolbar);
+  button('Fill right', fillRight, toolbar);
+  button('Find', findDialog, toolbar);
   const search = element('input'); search.type = 'search'; search.placeholder = t('Search'); search.value = state.q; search.setAttribute('aria-label', t('Search')); toolbar.append(search);
-  search.addEventListener('keydown', event => { if (event.key === 'Enter') void safe(async () => { state.q = search.value; state.offset = 0; await load(); }); });
+  const runSearch = () => safe(async () => { state.q = search.value; resetPaging(); await load(); });
+  search.addEventListener('keydown', event => { if (event.key === 'Enter') void runSearch(); });
+  button('Search', runSearch, toolbar);
   button('Filters', filterDialog, toolbar);
   button('Sort', sortDialog, toolbar);
   button('Columns', columnsDialog, toolbar);
+  if (schema.can_add) button('Add row', () => { if (busy) return; buffer.addRow(blankValues()); render(); }, toolbar);
+  if (schema.can_delete) button('Delete rows', deleteSelected, toolbar);
+  if (schema.can_undo) button('Revert save', () => safe(revertSave), toolbar);
+  button('Export', () => safe(() => download('csv')), toolbar);
+  if (schema.xlsx) button('XLSX', () => safe(() => download('xlsx')), toolbar);
+  if (schema.can_import) button('Import', () => safe(importDialog), toolbar);
+  button('Views', () => safe(viewsDialog), toolbar);
   if (schema.can_bulk) button('Bulk change', () => safe(bulkDialog), toolbar);
   if (schema.can_history) button('History', historyDialog, toolbar);
   button('Ordinary Admin', () => safe(async () => {
@@ -73,7 +92,7 @@ async function start() {
   const formulaBar = element('div', '', 'ms-formula-bar'); root.append(formulaBar);
   const address = element('output', 'A1', 'ms-address'); formulaBar.append(address);
   formulaBar.append(element('span', 'ƒx', 'ms-fx'));
-  const formulaInput = element('input'); formulaInput.setAttribute('aria-label', 'Formula'); formulaBar.append(formulaInput);
+  const formulaInput = element('input'); formulaInput.setAttribute('aria-label', t('Formula')); formulaBar.append(formulaInput);
   formulaInput.addEventListener('keydown', event => {
     if (busy) return;
     if (event.key === 'Enter' && active) { edit(active.getRow().getData().__modelsheet_pk, active.getField(), formulaInput.value); active.getElement().tabIndex=0; active.getElement().focus(); }
@@ -84,8 +103,16 @@ async function start() {
   const status = element('span', t('Loading')); status.setAttribute('role', 'status'); footer.append(status);
   const selectionInfo = element('span', '', 'ms-selection'); selectionInfo.title = t('Select all matching results in Bulk change'); footer.append(selectionInfo);
   const pageInfo = element('span'); footer.append(pageInfo);
-  const previous = button('Previous', () => safe(async () => { state.offset = Math.max(0, state.offset - state.limit); await load(); }), footer);
-  const next = button('Next', () => safe(async () => { state.offset += state.limit; await load(); }), footer);
+  const previous = button('Previous', () => safe(async () => {
+    if (state.pagination === 'keyset') { cursorStack.pop(); state.cursor = cursorStack.at(-1) ?? null; }
+    else state.offset = Math.max(0, state.offset - state.limit);
+    await load();
+  }), footer);
+  const next = button('Next', () => safe(async () => {
+    if (state.pagination === 'keyset') { cursorStack.push(nextCursor); state.cursor = nextCursor; }
+    else state.offset += state.limit;
+    await load();
+  }), footer);
   const filterInfo = element('div', '', 'ms-filter-info'); root.append(filterInfo);
 
   function setBusy(value: boolean) {
@@ -94,7 +121,7 @@ async function start() {
     saveButton.disabled = value || !buffer.dirty;
     search.disabled = value;
     formulaInput.disabled = value || !active || !editable.has(active.getField());
-    previous.disabled = value || state.offset === 0;
+    previous.disabled = value || (state.pagination === 'keyset' ? cursorStack.length <= 1 : state.offset === 0);
     next.disabled = value || !hasNext;
   }
 
@@ -151,7 +178,9 @@ async function start() {
       const data = await request('rows/?' + params(state));
       snapshot = data.snapshot; state = data.state; loadedState = structuredClone(state);
       buffer = new EditBuffer(data.rows, state.columns!, editable, data.today);
-      count = data.count; hasNext = data.has_next; active = null; errors.clear(); conflicts.clear(); savedCells.clear();
+      labels.clear();
+      for (const row of data.rows) for (const [name, label] of Object.entries(row.labels ?? {})) labels.set(`${row.pk}:${name}`, Array.isArray(label) ? label.join(', ') : label === null ? '' : String(label));
+      count = data.count; hasNext = data.has_next; nextCursor = data.next_cursor ?? null; active = null; errors.clear(); conflicts.clear(); savedCells.clear();
       // Keep the copied snapshot identity so pasting positional formulas after a view change fails explicitly.
       history.replaceState({}, '', options.base + '?' + params(state));
       table?.destroy();
@@ -165,12 +194,12 @@ async function start() {
             const direction = current?.dir === 'asc' ? 'desc' : current?.dir === 'desc' ? null : 'asc';
             const sort = event.shiftKey ? state.sort.filter(item => item.field !== name) : [];
             if (direction) sort.push({field:name, dir:direction});
-            state.sort = sort; state.offset = 0; await load();
+            state.sort = sort; resetPaging(); await load();
           }),
         };
         if (field.editable) {
-          definition.editor = field.choices.length ? 'list' : 'input';
-          if (field.choices.length) definition.editorParams = {values: Object.fromEntries(field.choices)};
+          definition.editor = editorFor(field);
+          if (field.choices.length && !field.related) definition.editorParams = {values: Object.fromEntries(field.choices)};
           definition.editable = () => !busy;
           definition.mutatorEdit = (value: any) => value;
         }
@@ -200,13 +229,13 @@ async function start() {
       table.on('columnResized', (column: any) => { widths[column.getField()] = column.getWidth(); storePreferences(); });
       await new Promise<void>(resolve => table.on('tableBuilt', () => resolve()));
       pageInfo.textContent = `${state.offset + (data.rows.length ? 1 : 0)}–${state.offset + data.rows.length}${count === null ? '' : ' / ' + count}`;
-      previous.disabled = state.offset === 0; next.disabled = !hasNext;
-      filterInfo.textContent = `${state.sort.map(item => `${meta.get(item.field)?.label ?? 'PK'} ${item.dir === 'asc' ? '↑' : '↓'}`).join(' · ')}${Object.keys(state.filter).length ? ' · ' + JSON.stringify(state.filter) : ''}`;
+      previous.disabled = state.pagination === 'keyset' ? cursorStack.length <= 1 : state.offset === 0; next.disabled = !hasNext;
+      renderFilterChips();
       status.className = ''; status.textContent = t('Ready');
     } finally { setBusy(false); }
   }
   function textNode(value: any) { return element('span', value === null || value === undefined ? '' : String(value)); }
-  function tableData() { return buffer.rows.map(row => ({__modelsheet_pk:row.pk, __modelsheet_original:row.values, ...row.values, ...buffer.changes[row.pk], ...Object.fromEntries(computed.map(field => [field.name,renderVersion]))})); }
+  function tableData() { return buffer.rows.filter(row => !buffer.deleted[row.pk]).map(row => ({__modelsheet_pk:row.pk, __modelsheet_original:row.values, ...row.values, ...buffer.changes[row.pk], ...Object.fromEntries(computed.map(field => [field.name,renderVersion]))})); }
   function formatCell(cell: any, field: Field) {
     const pk = cell.getRow().getData().__modelsheet_pk, name = field.name, node = textNode('');
     cell.getElement().classList.toggle('ms-readonly', !field.editable);
@@ -217,8 +246,7 @@ async function start() {
     cell.getElement().classList.toggle('ms-cell-saved', savedCells.has(`${pk}:${name}`));
     try {
       const value = buffer.value(pk, name);
-      node.textContent = field.choices.find(([key]) => key === value)?.[1] ?? (value === null ? '∅' : String(value));
-      if (field.type === 'DateTimeField' && value) node.textContent = new Intl.DateTimeFormat(options.language,{dateStyle:'short',timeStyle:'medium',timeZone:schema.timezone ?? 'UTC'}).format(new Date(String(value)));
+      node.textContent = displayValue(pk, field, value);
     } catch (error) { node.textContent = error instanceof FormulaError ? error.code : '#VALUE!'; node.className = 'ms-error'; }
     if (errors.has(`${pk}:${name}`)) node.title = errors.get(`${pk}:${name}`)!;
     return node;
@@ -232,14 +260,26 @@ async function start() {
   }
   function edit(pk: string, field: string, value: any) {
     if (busy) return;
-    buffer.apply([{pk, field, value}]); errors.delete(`${pk}:${field}`); conflicts.delete(`${pk}:${field}`); savedCells.delete(`${pk}:${field}`); savingKey = null; render();
+    buffer.apply([{pk, field, value}]); errors.delete(`${pk}:${field}`); conflicts.delete(`${pk}:${field}`); savedCells.delete(`${pk}:${field}`); savingKey = null;
+    const metaField = meta.get(field);
+    const message = metaField ? validateCell(metaField, value) : null;
+    if (message) errors.set(`${pk}:${field}`, t(message));
+    else scheduleValidate(pk);
+    render();
   }
   function render() {
     if (busy) return;
     // Update rows directly: table.updateData reprocesses all data and resets ranges/focus.
     const current = table;
     renderVersion++;
-    if (current) void Promise.all(tableData().map(row => current.getRow(row.__modelsheet_pk).update(row))).catch(showError);
+    if (current) {
+      const data = tableData();
+      const existing = new Set<string>(current.getData().map((row: any) => row.__modelsheet_pk));
+      const next = new Set<string>(data.map(row => row.__modelsheet_pk));
+      void Promise.all(data.map(row => existing.has(row.__modelsheet_pk) ? current.getRow(row.__modelsheet_pk).update(row) : current.addRow(row)))
+        .then(() => { for (const pk of existing) if (!next.has(pk)) current.getRow(pk)?.delete(); })
+        .catch(showError);
+    }
     saveButton.disabled = !buffer.dirty;
     status.className = ''; status.textContent = buffer.dirty ? `${t('Changed rows')}: ${Object.keys(buffer.changes).length}` : t('Ready');
     updateFormulaBar();
@@ -247,7 +287,8 @@ async function start() {
   async function save() {
     if (!buffer.dirty || busy) return;
     setBusy(true); status.textContent = t('Saving');
-    const body = {snapshot, view_state:loadedState, changes:buffer.payload()};
+    const parts = buffer.saveParts();
+    const body = {snapshot, view_state:loadedState, ...parts};
     table?.redraw(true);
     const serialized = JSON.stringify(body);
     if (serialized !== savingBody || !savingKey) { savingBody = serialized; savingKey = crypto.randomUUID(); }
@@ -285,7 +326,14 @@ async function start() {
       if (event.key.toLowerCase() === 'z') { event.preventDefault(); event.shiftKey ? buffer.redo() : buffer.undo(); render(); }
       if (event.key.toLowerCase() === 'y') { event.preventDefault(); buffer.redo(); render(); }
       if (event.key.toLowerCase() === 'd') { event.preventDefault(); try { fillDown(); } catch (error) { showError(error); } }
+      if (event.key.toLowerCase() === 'r') { event.preventDefault(); try { fillRight(); } catch (error) { showError(error); } }
       if (event.key.toLowerCase() === 's') { event.preventDefault(); void save().catch(showError); }
+    }
+    const inGrid = Boolean(target.closest('.tabulator'));
+    if (inGrid && event.key === 'F2' && active && editable.has(active.getField())) {
+      event.preventDefault(); pendingKey = ''; active.edit();
+    } else if (inGrid && event.key.length === 1 && event.key !== '\t' && !event.ctrlKey && !event.metaKey && !event.altKey && active && editable.has(active.getField())) {
+      event.preventDefault(); pendingKey = event.key; active.edit();
     }
     if (event.key === 'Delete' || event.key === 'Backspace') {
       event.preventDefault(); buffer.apply(selected().map(cell => ({pk:cell.getRow().getData().__modelsheet_pk, field:cell.getField(), value:null}))); render();
@@ -315,7 +363,7 @@ async function start() {
     event.preventDefault();
     try {
       const text = event.clipboardData?.getData('text/plain') ?? '', values = parseTSV(text), bounds = selectionBounds(), edits = [];
-      if (values.length > schema.max_save_rows || text.length > 1000000) throw new Error('Paste exceeds configured limits');
+      if (values.length > schema.max_save_rows || text.length > 1000000) throw new Error(t('Paste exceeds configured limits'));
       for (let r = 0; r < values.length; r++) for (let c = 0; c < values[r].length; c++) {
         if (!buffer.rows[bounds.top + r] || !state.columns![bounds.left + c]) throw new FormulaError('#REF!', 'Paste extends beyond the loaded page');
         let value: string | null = values[r][c] === '' ? null : values[r][c];
@@ -340,7 +388,7 @@ async function start() {
   }
   function filterGroup(value: any = {}, onChange: () => void = () => {}): {node: HTMLElement; read: () => any} {
     const node = element('fieldset', '', 'ms-filter-group');
-    const mode = select([['and','AND'],['or','OR']], value.or ? 'or' : 'and'); node.append(mode);
+    const mode = select([['and', t('AND')],['or', t('OR')]], value.or ? 'or' : 'and'); node.append(mode);
     const children: {node: HTMLElement; read: () => any}[] = [];
     function attach(child: {node: HTMLElement; read: () => any}) {
       children.push(child); node.append(child.node); button('Remove', () => { children.splice(children.indexOf(child),1); child.node.remove(); onChange(); }, child.node);
@@ -348,11 +396,13 @@ async function start() {
     const condition = (item: any = {}) => {
       const row = element('div', '', 'ms-condition');
       const field = select(fields.map(f => [f.name, f.label]), item.field ?? fields[0]?.name ?? '');
-      const op = select(['eq','ne','lt','lte','gt','gte','in','not_in','isnull','contains'].map(x => [x,x]), item.op ?? 'eq');
-      const input = element('input'); input.placeholder = 'Value / comma-separated list'; input.value = Array.isArray(item.value) ? item.value.join(',') : String(item.value ?? '');
-      row.append(field, op, input);
-      return {node:row, read:() => ({field:field.value, op:op.value,
-        value:op.value === 'isnull' ? ['true','1'].includes(input.value.toLowerCase()) : ['in','not_in'].includes(op.value) ? input.value.split(',').map(x => x.trim()) : input.value})};
+      const op = select(FILTER_OPERATORS.map(([key, label]) => [key, t(label)]), item.op ?? 'eq');
+      let input = valueInput(field.value, op.value, item.value);
+      const mount = element('span'); mount.append(input); row.append(field, op, mount);
+      const refresh = () => { input = valueInput(field.value, op.value, readValue()); mount.replaceChildren(input); };
+      field.addEventListener('change', refresh); op.addEventListener('change', refresh);
+      const readValue = () => op.value === 'isnull' ? ['true','1'].includes(input.value.toLowerCase()) : ['in','not_in'].includes(op.value) ? input.value.split(',').map(x => x.trim()).filter(Boolean) : input.value;
+      return {node:row, read:() => ({field:field.value, op:op.value, value:readValue()})};
     };
     button('Add condition', () => { attach(condition()); onChange(); }, node);
     button('Add group', () => { attach(filterGroup({}, onChange)); onChange(); }, node);
@@ -361,7 +411,7 @@ async function start() {
   }
   function filterDialog() {
     const {dialog, body, actions} = modal('Filters'), builder = filterGroup(state.filter); body.append(builder.node);
-    button('Apply', () => safe(async () => { state.filter = builder.read(); state.offset = 0; await load(); dialog.close(); }), actions, 'ms-primary');
+    button('Apply', () => safe(async () => { state.filter = builder.read(); resetPaging(); await load(); dialog.close(); }), actions, 'ms-primary');
   }
   function sortDialog() {
     const {dialog,body,actions} = modal('Sort');
@@ -375,14 +425,14 @@ async function start() {
     }
     state.sort.forEach(add); if (!sorts.length) add();
     button('Add sort',() => add(),body);
-    button('Apply',() => safe(async () => { state.sort=sorts.map(item => ({field:item.field.value,dir:item.direction.value})); state.offset=0; await load(); dialog.close(); }),actions,'ms-primary');
+    button('Apply',() => safe(async () => { state.sort=sorts.map(item => ({field:item.field.value,dir:item.direction.value})); resetPaging(); await load(); dialog.close(); }),actions,'ms-primary');
   }
   const preferenceKey = 'modelsheet:' + options.base;
   let preferences: any = {};
   try { preferences = JSON.parse(localStorage.getItem(preferenceKey) ?? '{}'); } catch { /* Optional local preferences. */ }
   const widths: Record<string, number> = preferences.widths ?? {};
   let frozen: number = preferences.frozen ?? 0;
-  function storePreferences() { try { localStorage.setItem(preferenceKey, JSON.stringify({widths, frozen})); } catch { /* Storage may be disabled. */ } }
+  function storePreferences() { try { localStorage.setItem(preferenceKey, JSON.stringify({widths, frozen, views: preferences.views ?? []})); } catch { /* Storage may be disabled. */ } }
   function columnsDialog() {
     const {dialog, body, actions} = modal('Columns');
     const order = [...state.columns!, ...fields.map(f => f.name).filter(name => !state.columns!.includes(name))];
@@ -514,5 +564,267 @@ async function start() {
       },container);
     }
   }
+  function resetPaging() {
+    state.offset = 0; state.cursor = null; cursorStack.splice(0, cursorStack.length, null);
+  }
+  function blankValues() {
+    const values: Record<string, unknown> = {};
+    for (const field of fields) if (field.editable) values[field.name] = field.type === 'BooleanField' ? false : null;
+    return values;
+  }
+  function deleteSelected() {
+    if (busy) return;
+    const pks = [...new Set(selected().map(cell => cell.getRow().getData().__modelsheet_pk))];
+    if (!pks.length && active) pks.push(active.getRow().getData().__modelsheet_pk);
+    if (!pks.length) return;
+    buffer.removeRows(pks); render();
+  }
+  async function revertSave() {
+    await request('undo/', {idempotency_key: crypto.randomUUID()});
+    await load(); status.textContent = t('Reverted');
+  }
+  async function download(format: string) {
+    const response = await fetch(options.base + 'export/?' + params(state) + '&format=' + format, {credentials: 'same-origin'});
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error?.message ?? `HTTP ${response.status}`);
+    }
+    const blob = await response.blob();
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob); link.download = `sheet.${format}`; link.click();
+    URL.revokeObjectURL(link.href);
+  }
+  function fillRight() {
+    if (busy) return;
+    const skipped = buffer.apply(fillRightEdits(buffer, state.columns!, selectionBounds()));
+    render(); if (skipped) status.textContent = `${t('Readonly cells skipped')}: ${skipped}`;
+  }
+  function findDialog() {
+    const {dialog, body, actions} = modal('Find');
+    const query = element('input'); query.placeholder = t('Find'); query.setAttribute('aria-label', t('Find'));
+    const replacement = element('input'); replacement.placeholder = t('Replace'); replacement.setAttribute('aria-label', t('Replace'));
+    const match = element('input'); match.type = 'checkbox';
+    const matchLabel = element('label', t('Match case')); matchLabel.prepend(match);
+    body.append(query, replacement, matchLabel);
+    button('Replace all', () => {
+      const edits = findReplaceEdits(buffer, state.columns!, query.value, replacement.value, match.checked);
+      const skipped = buffer.apply(edits); render();
+      status.textContent = `${t('Changed rows')}: ${edits.length - skipped}`;
+      dialog.close();
+    }, actions, 'ms-primary');
+  }
+  function renderFilterChips() {
+    filterInfo.replaceChildren();
+    const sortText = state.sort.map(item => `${meta.get(item.field)?.label ?? 'PK'} ${item.dir === 'asc' ? '↑' : '↓'}`).join(' · ');
+    if (sortText) filterInfo.append(element('span', sortText));
+    for (const chip of describeFilter(state.filter, name => meta.get(name)?.label ?? name, t)) {
+      const node = element('button', chip, 'ms-chip'); node.type = 'button';
+      node.addEventListener('click', () => { if (!busy) filterDialog(); });
+      filterInfo.append(node);
+    }
+  }
+  function valueInput(fieldName: string, op: string, current: unknown) {
+    const field = meta.get(fieldName);
+    const text = Array.isArray(current) ? current.join(',') : current === undefined || current === null ? '' : String(current);
+    if (op === 'isnull') return select([['false', t('No')], ['true', t('Yes')]], text === 'true' ? 'true' : 'false');
+    if (field?.type === 'BooleanField' && op !== 'in' && op !== 'not_in') return select([['true', t('Yes')], ['false', t('No')]], text || 'true');
+    if (field?.choices?.length && op !== 'in' && op !== 'not_in' && op !== 'contains') {
+      return select(field.choices.map(([key, label]) => [String(key), label] as [string, string]), text);
+    }
+    const input = element('input');
+    input.placeholder = t('Value / comma-separated list');
+    input.value = text;
+    if (op !== 'in' && op !== 'not_in' && op !== 'contains') {
+      if (field?.type === 'DateField') input.type = 'date';
+      if (field?.type === 'DateTimeField') input.type = 'datetime-local';
+      if (field?.type === 'TimeField') input.type = 'time';
+    }
+    if (field?.related && op !== 'in' && op !== 'not_in') input.title = t('Search');
+    return input;
+  }
+  function displayValue(pk: string, field: Field, value: unknown) {
+    if (field.related) {
+      const label = labels.get(`${pk}:${field.name}`);
+      if (label) return label;
+      if (Array.isArray(value)) return value.join(', ');
+    }
+    const choice = field.choices.find(([key]) => key === value)?.[1];
+    if (choice) return choice;
+    if (value === null || value === undefined || value === '') return value === null ? '∅' : '';
+    if (field.type === 'BooleanField') return value ? t('Yes') : t('No');
+    if (field.type === 'DateField') return new Intl.DateTimeFormat(options.language, {dateStyle: 'short', timeZone: 'UTC'}).format(new Date(`${String(value).slice(0, 10)}T00:00:00Z`));
+    if (field.type === 'DateTimeField') return new Intl.DateTimeFormat(options.language, {dateStyle: 'short', timeStyle: 'medium', timeZone: schema.timezone ?? 'UTC'}).format(new Date(String(value)));
+    return String(value);
+  }
+  function editorFor(field: Field) {
+    if (field.type === 'BooleanField') return booleanEditor;
+    if (field.related) return relationEditor(field);
+    if (field.choices.length) return 'list';
+    if (field.type === 'DateField') return typedEditor('date', field);
+    if (field.type === 'DateTimeField') return typedEditor('datetime-local', field);
+    if (field.type === 'TimeField') return typedEditor('time', field);
+    return typedEditor('text', field);
+  }
+  function typedEditor(kind: string, field: Field) {
+    return (cell: any, onRendered: any, success: any, cancel: any) => {
+      const input = document.createElement('input');
+      input.type = kind;
+      const typed = pendingKey; pendingKey = '';
+      const current = cell.getValue();
+      const shown = current === null || current === undefined ? '' : String(current).slice(0, kind === 'date' ? 10 : kind === 'datetime-local' ? 16 : 99);
+      input.value = kind === 'text' && typed ? typed : shown;
+      if (field.max_length && kind === 'text') input.maxLength = field.max_length;
+      if (kind === 'text' && (field.type === 'DecimalField' || field.type === 'FloatField' || field.type === 'IntegerField')) input.inputMode = 'decimal';
+      onRendered(() => { input.focus(); if (kind === 'text' && typed) input.setSelectionRange(input.value.length, input.value.length); else input.select?.(); });
+      let done = false;
+      const commit = () => { if (done) return; done = true; success(kind === 'text' ? input.value : (input.value || null)); };
+      input.addEventListener('keydown', event => { if (event.key === 'Enter') commit(); if (event.key === 'Escape') cancel(cell.getValue()); });
+      input.addEventListener('blur', commit);
+      return input;
+    };
+  }
+  function booleanEditor(cell: any, onRendered: any, success: any) {
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = cell.getValue() === true || cell.getValue() === 'true' || cell.getValue() === 1;
+    onRendered(() => input.focus());
+    let done = false;
+    const commit = () => { if (done) return; done = true; success(input.checked); };
+    input.addEventListener('change', commit);
+    input.addEventListener('blur', commit);
+    return input;
+  }
+  function relationEditor(field: Field) {
+    return (cell: any, onRendered: any, success: any, cancel: any) => {
+      const pk = cell.getRow().getData().__modelsheet_pk;
+      const wrap = document.createElement('div'); wrap.className = 'ms-lookup';
+      const input = document.createElement('input');
+      const typed = pendingKey; pendingKey = '';
+      input.value = typed || labels.get(`${pk}:${field.name}`) || (cell.getValue() ?? '');
+      const list = document.createElement('div'); list.className = 'ms-lookup-list';
+      let picked: {id: string; label: string} | null = null;
+      let done = false;
+      const commit = () => {
+        if (done) return;
+        done = true;
+        if (!input.value) { labels.set(`${pk}:${field.name}`, ''); success(null); return; }
+        if (picked) { labels.set(`${pk}:${field.name}`, picked.label); success(picked.id); return; }
+        success(input.value);
+      };
+      input.addEventListener('input', () => {
+        picked = null;
+        void request(`lookup/?field=${encodeURIComponent(field.name)}&q=${encodeURIComponent(input.value)}`).then(data => {
+          list.replaceChildren();
+          for (const item of data.results as {id: string; label: string}[]) {
+            const option = element('button', item.label); option.type = 'button';
+            option.addEventListener('mousedown', event => { event.preventDefault(); picked = item; input.value = item.label; commit(); });
+            list.append(option);
+          }
+        }).catch(() => list.replaceChildren());
+      });
+      input.addEventListener('keydown', event => { if (event.key === 'Enter') commit(); if (event.key === 'Escape') cancel(cell.getValue()); });
+      input.addEventListener('blur', () => window.setTimeout(commit, 0));
+      if (typed) input.dispatchEvent(new Event('input'));
+      onRendered(() => input.focus());
+      wrap.append(input, list); return wrap;
+    };
+  }
+  function scheduleValidate(pk: string) {
+    window.clearTimeout(validateTimer);
+    validateTimer = window.setTimeout(() => { void dryRun(pk); }, 400);
+  }
+  async function dryRun(pk: string) {
+    const values = buffer.changes[pk];
+    if (!values || busy) return;
+    try {
+      const data = await request('validate/', {changes: [{pk, values}]});
+      const result = data.results?.[0];
+      if (!result || result.ok) return;
+      const details = result.error?.details;
+      if (details && typeof details === 'object') {
+        for (const [field, message] of Object.entries(details)) errors.set(`${pk}:${field}`, String(message));
+      } else if (result.error?.field) errors.set(`${pk}:${result.error.field}`, String(result.error.message));
+      table?.redraw(true);
+    } catch { /* Сухой прогон необязателен: локальная проверка уже показана. */ }
+  }
+  async function importDialog() {
+    const {dialog, body, actions} = modal('Import');
+    const file = element('input'); file.type = 'file'; file.accept = '.csv,.xlsx,text/csv';
+    body.append(file);
+    const mapping = element('div'); body.append(mapping);
+    const output = element('div', '', 'ms-report'); body.append(output);
+    let headers: string[] = [], operation: any = null;
+    file.addEventListener('change', async () => {
+      if (!file.files?.[0]) return;
+      const form = new FormData(); form.set('phase', 'inspect'); form.set('file', file.files[0]);
+      const response = await fetch(options.base + 'import/', {method: 'POST', credentials: 'same-origin', headers: {'X-CSRFToken': csrf}, body: form});
+      const data = await response.json();
+      if (!response.ok) { output.textContent = data.error?.message ?? ''; return; }
+      headers = data.headers; mapping.replaceChildren(element('p', t('Map columns')));
+      for (const header of headers) {
+        const row = element('div', '', 'ms-condition');
+        const target = select([['', '—'], ['pk', 'PK'], ...fields.filter(item => item.editable).map(item => [item.name, item.label] as [string, string])], header === 'pk' ? 'pk' : (fields.find(item => item.name === header)?.name ?? ''));
+        target.dataset.header = header; row.append(element('span', header), target); mapping.append(row);
+      }
+    });
+    button('Preview import', async () => {
+      if (!file.files?.[0]) return;
+      const form = new FormData();
+      const columns: Record<string, string> = {};
+      mapping.querySelectorAll('select').forEach(node => { const header = (node as HTMLSelectElement).dataset.header; if (header && node.value) columns[header] = node.value; });
+      form.set('phase', 'preview'); form.set('mapping', JSON.stringify(columns)); form.set('idempotency_key', crypto.randomUUID()); form.set('file', file.files[0]);
+      const response = await fetch(options.base + 'import/', {method: 'POST', credentials: 'same-origin', headers: {'X-CSRFToken': csrf}, body: form});
+      const data = await response.json();
+      if (!response.ok) { output.textContent = data.error?.message ?? ''; return; }
+      operation = data; output.replaceChildren(); operationReport(output, data);
+    }, actions);
+    button('Confirm', async () => {
+      if (!operation || operation.errors) return;
+      const result = await request('bulk/run/', {operation: operation.id});
+      output.replaceChildren(); operationReport(output, result);
+      if (!buffer.dirty) void load();
+    }, actions, 'ms-primary');
+  }
+  async function viewsDialog() {
+    const {dialog, body, actions} = modal('Views');
+    const remote = await request('views/').catch(() => ({views: []}));
+    body.append(element('h3', t('Local views')));
+    for (const view of preferences.views ?? []) body.append(viewRow(view.name, () => applyView(view), () => {
+      preferences.views = (preferences.views ?? []).filter((item: any) => item.name !== view.name); storePreferences(); dialog.close();
+    }));
+    body.append(element('h3', t('Shared views')));
+    for (const view of remote.views ?? []) body.append(viewRow(view.name + (view.shared ? ' · ' + t('Shared') : ''), () => applyView(view.state), () => {
+      if (view.own) void request('views/delete/', {id: view.id}).then(() => dialog.close());
+    }));
+    const name = element('input'); name.placeholder = t('View name'); name.setAttribute('aria-label', t('View name'));
+    const shared = element('input'); shared.type = 'checkbox';
+    const sharedLabel = element('label', t('Shared')); sharedLabel.prepend(shared);
+    body.append(name, sharedLabel);
+    button('Save view', async () => {
+      const view = currentView(name.value || t('Views'));
+      preferences.views = [...(preferences.views ?? []).filter((item: any) => item.name !== view.name), view];
+      storePreferences();
+      await request('views/save/', {name: view.name, state: view, shared: shared.checked});
+      dialog.close();
+    }, actions, 'ms-primary');
+    function applyView(view: any) {
+      state.q = view.q ?? ''; state.filter = view.filter ?? {}; state.sort = view.sort ?? [];
+      if (view.columns) state.columns = view.columns;
+      frozen = view.frozen ?? frozen; Object.assign(widths, view.widths ?? {});
+      search.value = state.q; storePreferences(); resetPaging();
+      void load().then(() => dialog.close());
+    }
+  }
+  function viewRow(title: string, apply: () => void, remove: () => void) {
+    const row = element('div', '', 'ms-condition');
+    button('Apply view', apply, row);
+    row.append(element('span', title));
+    button('Delete view', remove, row);
+    return row;
+  }
+  function currentView(name: string) {
+    return {name, q: state.q, filter: state.filter, sort: state.sort, columns: state.columns, frozen, widths, pagination: state.pagination ?? 'offset'};
+  }
+
   await load();
 }

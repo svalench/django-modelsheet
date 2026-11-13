@@ -1,6 +1,22 @@
 # 后台任务
 
-软件包提供 worker 入口和持久化操作状态，不附带队列、broker、调度器或 Celery 依赖。未配置适配器时，超出 `bulk_background_threshold` 的操作在建立计划前拒绝。
+软件包提供 worker 入口和持久化操作状态。默认 `background_adapter` 仍为空，因此超出 `bulk_background_threshold` 的操作在建立计划前拒绝，直到你选择适配器。
+
+可选内置适配器：
+
+| 适配器 | 路径 | 用途 |
+| --- | --- | --- |
+| 线程 | `modelsheet.background.ThreadBackgroundAdapter` | 无需额外服务。任务在守护线程中运行，进程重启后丢失；租约到期后可恢复。 |
+| Django tasks | `modelsheet.background.DjangoTasksBackgroundAdapter` | Django 6+ 的 `django.tasks`。`ImmediateBackend` 在 `enqueue` 内同步执行。 |
+| Celery | `modelsheet.contrib.celery_adapter.CeleryBackgroundAdapter` | 安装 `django-modelsheet[celery]`，在 worker 中导入该模块，并把设置指向这个类。任务名是 `modelsheet.process_operation`。 |
+
+```python
+MODELSHEET = {
+    "background_adapter": "modelsheet.background.ThreadBackgroundAdapter",
+}
+```
+
+租户上下文仍应放在项目自己的适配器中。未配置适配器时，超出阈值的操作在建立计划前拒绝。
 
 ## 项目适配器
 
