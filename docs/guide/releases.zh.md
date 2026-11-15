@@ -1,5 +1,21 @@
 # 版本与限制
 
+## 0.5.0 · 2026 年 11 月 13 日
+
+外键显示关联对象的文本，并提供受权限约束的自动完成编辑器。支持按字段类型编辑、CSV/XLSX 导入导出、已保存视图、在表格中新增和删除行、服务器撤销上次保存、更易读的筛选、查找替换、向右填充、可选后台适配器、不落库的校验，以及可选的键集分页。对象权限不再在分页中留下空位。迁移 `0003_saved_view` 增加共享视图。
+
+```bash
+python -m pip install --upgrade 'django-modelsheet[xlsx,celery]==0.5.0'
+```
+
+`xlsx` 与 `celery` 为可选依赖。备份数据库，安装软件包，执行 `migrate` 和 `collectstatic`，重启后台进程并刷新浏览器。默认分页仍是 `offset`，默认不配置后台适配器。
+
+## 0.4.0 · 2026 年 10 月 30 日
+
+按记录只读字段会在保存和批量操作中被拒绝。`GET rows/` 受频率限制，并会清理旧快照。`history_scope` 可以隐藏其他用户的操作（默认仍为 `"all"`）。`offset` 受 `max_offset` 限制。API 错误信息可翻译，意外异常不再被报告为格式错误的请求。
+
+没有数据库迁移。安装 `django-modelsheet==0.4.0`，执行 `collectstatic` 并重启。
+
 ## 0.3.0 · 2026 年 10 月 25 日
 
 修复编辑缓冲区中的特殊字符串主键问题，并固定预览失效时间。包含检查权限后缓存的批量聚合、过期响应保护和自动发现 `ModelSheetAdmin`。发布必须通过完整 CI 矩阵、浏览器和安装包测试，以及严格的文档检查。
@@ -51,6 +67,21 @@ python -m pip install django-modelsheet==0.3.0a1
 
 在 [CI](https://github.com/svalench/django-modelsheet/actions/workflows/ci.yml) 检查所用组合；本地验证范围见[验证报告](../validation.md)。
 
+## 0.5.0 边界
+
+| 功能 | 当前行为 |
+| --- | --- |
+| 创建 / 删除 | 拥有模型 add/delete 权限时，与其他更改同一次原子保存 |
+| 外键 | 显示文本并自动完成；存储值仍是主键 |
+| 多对多 | 只读标签；导入和撤销不修改关联 |
+| 公式 | 一次性计算值或虚拟列；新行不能以公式开头 |
+| 撤销 | 本地缓冲，以及冲突安全的服务器撤销上次保存 |
+| 文件导入 / 导出 | CSV；安装可选 extra 后支持 XLSX；仍支持 TSV 剪贴板 |
+| 后台队列 | 可选线程、Django tasks 或 Celery；默认不启用 |
+| 分页 | 默认 offset；keyset 需显式开启，且不受 `max_offset` 限制 |
+| 多数据库 | 仅 `default` |
+| 计算列排序 | 不支持 |
+
 ## 0.3.0 边界
 
 | 功能 | 当前行为 |
@@ -65,6 +96,6 @@ python -m pip install django-modelsheet==0.3.0a1
 | 多数据库 | 仅 `default` |
 | 计算列排序 | 不支持 |
 
-服务器撤销、关系编辑器、导入导出、fast-save、持久公式和游标分页属于后续方向，并非时间承诺。
+上表记录的是 0.3.0。关系编辑器、导入导出、服务器撤销和键集分页已在 0.5.0 提供。fast-save 与持久公式仍是后续工作。
 
 [源码](https://github.com/svalench/django-modelsheet) · [更新日志](https://github.com/svalench/django-modelsheet/blob/main/CHANGELOG.md) · [贡献指南](https://github.com/svalench/django-modelsheet/blob/main/CONTRIBUTING.md) · [安全政策](https://github.com/svalench/django-modelsheet/blob/main/SECURITY.md)

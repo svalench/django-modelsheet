@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-modelsheet"
-version = "0.4.0"
+version = "0.5.0"
 description = "Spreadsheet editing, formulas and previewed bulk operations for Django Admin"
 authors = [{ name = "svalench" }]
 keywords = ["django", "django-admin", "spreadsheet", "bulk-edit", "formulas"]
@@ -41,6 +41,8 @@ Changelog = "https://github.com/svalench/django-modelsheet/blob/main/CHANGELOG.m
 test = ["pytest>=8", "pytest-django>=4.9", "pytest-timeout>=2", "build", "ruff", "mypy", "pytest-cov", "playwright", "PyYAML>=6"]
 postgres = ["psycopg[binary]>=3.2"]
 mysql = ["mysqlclient>=2.2"]
+xlsx = ["openpyxl>=3.1"]
+celery = ["celery>=5.3"]
 
 [tool.setuptools.packages.find]
 include = ["modelsheet*"]

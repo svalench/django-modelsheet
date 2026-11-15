@@ -2,7 +2,7 @@ from django.contrib import admin
 
 from modelsheet.admin import ModelSheetAdmin
 
-from .models import Category, Order, Product
+from .models import Category, Order, Product, Tag
 
 
 @admin.register(Product)
@@ -20,6 +20,7 @@ class ProductAdmin(ModelSheetAdmin):
         "active",
         "available_on",
         "note",
+        "tags",
     )
     sheet_editable = (
         "name",
@@ -27,6 +28,7 @@ class ProductAdmin(ModelSheetAdmin):
         "cost_price",
         "stock",
         "status",
+        "category",
         "active",
         "available_on",
         "note",
@@ -44,4 +46,11 @@ class OrderAdmin(ModelSheetAdmin):
     list_per_page = 200
 
 
-admin.site.register(Category)
+@admin.register(Category)
+class CategoryAdmin(admin.ModelAdmin):
+    search_fields = ("name",)
+
+
+@admin.register(Tag)
+class TagAdmin(admin.ModelAdmin):
+    search_fields = ("name",)

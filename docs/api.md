@@ -4,10 +4,14 @@ Routes are relative to `/admin/<app>/<model>/sheet/`. All endpoints use Admin
 sessions and permission checks. Mutations require CSRF and `application/json`.
 Responses have `Cache-Control: no-store`.
 
-`GET schema/` returns visible concrete fields, editability, safe virtual columns and capabilities.
-`GET rows/` accepts `q`, JSON `filter`, JSON `sort`, `offset`, `limit`, and JSON
-`columns` (displayed field order). It returns rows `{pk,version,values}`, snapshot,
-normalized state, UTC today, count (or null) and has_next.
+`GET schema/` returns visible concrete fields, editability, safe virtual columns and
+`can_add`, `can_delete`, `can_undo`, `can_import`,
+`pagination` and whether XLSX is installed.
+`GET rows/` accepts `q`, JSON `filter`, JSON `sort`, `offset`, `limit`, JSON
+`columns`, and for keyset mode `pagination=keyset` plus `cursor`. It returns rows
+`{pk,version,values,labels}`, snapshot, normalized state, UTC today, count (or null),
+has_next and next_cursor. Relation cells keep the primary key in `values` and the
+display text in `labels`. Hidden objects are omitted from the page and the count.
 
 ```json
 {"and":[{"field":"stock","op":"lt","value":10},{"field":"status","op":"eq","value":"ready"}]}
@@ -26,7 +30,9 @@ contains. They cannot contain ORM paths or custom lookups. Sort is a list such a
 }
 ```
 
-POST this to `save/`. Each row appears once; all fields are validated together;
+POST this to `save/`. The same body may also include `creates` (`[{temp_id,values}]`)
+and `deletes` (`[{pk,version}]`). New rows cannot start with a formula. Each row
+appears once; all fields are validated together;
 the request is atomic. Submit the exact same body and idempotency key after a lost
 response. Reusing a key with different content is a 409 conflict. Retrying after an
 operation is purged is outside the idempotency retention window.
@@ -44,6 +50,15 @@ Use next_offset for subsequent item pages; it remains valid when row access hide
 `POST operations/<uuid>/cancel/` and `/resume/` accept `{}` and are owner-only.
 `GET history/?offset=0` returns up to 20 operations and requires history permission.
 Reading another user's operation also requires history permission.
+
+`POST validate/` accepts `{changes:[{pk,values}]}` and runs `full_clean()` without
+saving. `POST undo/` reverts the last save, or `{operation}` when given, if every
+fingerprint still matches. `GET lookup/?field=&q=` searches the related ModelAdmin.
+`GET export/?format=csv|xlsx` streams the filtered view (visible columns only).
+`POST import/` is multipart (`phase=inspect|preview`, file, mapping, idempotency key)
+and returns a bulk operation. `GET views/`, `POST views/save/` and `POST views/delete/`
+manage named views. Shared views are visible to anyone who can open the sheet; only
+the owner can delete one.
 
 Errors are `{error:{code,message,pk?,field?,details?}}`. Typical statuses:
 400 parse/validation, 403 permission, 404 unavailable operation/model, 409 version,

@@ -18,7 +18,7 @@ from .models import Operation
 from .permissions import scope_history
 from .query import parse_state
 from .services import check_model, report
-from .views import endpoint
+from .views import endpoint, import_endpoint
 
 
 class ModelSheetAdmin(admin.ModelAdmin):
@@ -77,6 +77,13 @@ class ModelSheetAdmin(admin.ModelAdmin):
             ("schema", "schema"),
             ("rows", "rows"),
             ("save", "save"),
+            ("validate", "validate"),
+            ("undo", "undo"),
+            ("lookup", "lookup"),
+            ("export", "export"),
+            ("views", "views"),
+            ("views/save", "save_view"),
+            ("views/delete", "delete_view"),
             ("bulk/preview", "preview"),
             ("bulk/run", "run"),
             ("history", "history"),
@@ -88,6 +95,13 @@ class ModelSheetAdmin(admin.ModelAdmin):
                     name=f"{prefix}_sheet_{action}",
                 )
             )
+        routes.append(
+            path(
+                "sheet/import/",
+                wrap(partial(import_endpoint, admin=self)),
+                name=f"{prefix}_sheet_import",
+            )
+        )
         for suffix, action in [("", "operation"), ("cancel/", "cancel"), ("resume/", "resume")]:
             routes.append(
                 path(
@@ -173,7 +187,7 @@ class ModelSheetAdmin(admin.ModelAdmin):
                 "modelsheet/unavailable.html",
                 {
                     **self.admin_site.each_context(request),
-                    "title": "Model sheet unavailable",
+                    "title": _("Model sheet unavailable"),
                     "message": str(exc),
                     "opts": self.model._meta,
                 },

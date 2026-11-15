@@ -19,6 +19,11 @@ DEFAULTS = {
     "max_request_bytes": 1_000_000,
     "max_offset": 100_000,
     "max_bulk_rows": 100_000,
+    "max_export_rows": 100_000,
+    "max_import_rows": 20_000,
+    "max_import_bytes": 5_000_000,
+    # offset — страницы со смещением; keyset — курсор по устойчивой сортировке.
+    "pagination": "offset",
     "max_filter_depth": 10,
     "max_filter_nodes": 100,
     "max_operations_per_minute": 30,

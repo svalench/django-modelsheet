@@ -1,6 +1,11 @@
+import threading
+
 from django.contrib.admin import sites
 from django.contrib.auth import get_user_model
+from django.db import connections
+from django.test import RequestFactory
 
+from .adapters import BackgroundAdapter
 from .bulk import process_operation
 from .conf import component
 from .errors import SheetError
@@ -42,3 +47,63 @@ def process(operation_id, phase):
             status="failed", lease_until=None, lease_token=None, updated_at=timezone.now()
         )
         raise
+
+
+def worker_request(user):
+    """Минимальный request для воркера. Проектный адаптер обязан добавить tenant."""
+    request = RequestFactory().post("/modelsheet-worker/")
+    request.user = user
+    return request
+
+
+class ThreadBackgroundAdapter(BackgroundAdapter):
+    """Фон в потоке процесса. Не переживает рестарт; resume после истечения lease."""
+
+    def capture_context(self, request):
+        return {}
+
+    def restore_context(self, user, context):
+        return worker_request(user)
+
+    def enqueue(self, operation_id, phase):
+        def run():
+            try:
+                process(operation_id, phase)
+            finally:
+                connections.close_all()
+
+        threading.Thread(target=run, name=f"modelsheet-{phase}", daemon=True).start()
+
+
+class DjangoTasksBackgroundAdapter(BackgroundAdapter):
+    """Очередь django.tasks (Django 6+). ImmediateBackend выполняет задачу сразу."""
+
+    def capture_context(self, request):
+        return {}
+
+    def restore_context(self, user, context):
+        return worker_request(user)
+
+    def enqueue(self, operation_id, phase):
+        try:
+            from django.tasks import task
+        except ImportError as exc:
+            raise RuntimeError("django.tasks is available on Django 6 and newer.") from exc
+        # Задача обязана быть функцией модуля: django.tasks отклоняет вложенные.
+        if getattr(process_modelsheet_operation, "enqueue", None) is None or not isinstance(
+            process_modelsheet_operation, task_type()
+        ):
+            globals()["process_modelsheet_operation"] = task(process_modelsheet_operation)
+        process_modelsheet_operation.enqueue(operation_id, phase)
+
+
+def process_modelsheet_operation(operation_id, phase):
+    process(operation_id, phase)
+
+
+def task_type():
+    try:
+        from django.tasks import Task
+    except ImportError:
+        return ()
+    return Task

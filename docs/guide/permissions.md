@@ -17,10 +17,10 @@ The idempotent command creates groups but assigns no users. Assign groups in Adm
 | Group | Capabilities |
 | --- | --- |
 | ModelSheet Viewer | Read sheets |
-| ModelSheet Editor | Read and edit |
-| ModelSheet Operator | Edit, bulk operations and history |
+| ModelSheet Editor | Read, edit, add, delete and undo the last save |
+| ModelSheet Operator | Edit, add, delete, undo, bulk operations and history |
 | ModelSheet Auditor | Read and history |
-| ModelSheet Admin | Package capabilities; no superuser status |
+| ModelSheet Admin | Package capabilities including undo, add and delete; no superuser status |
 
 Templates grant configured fields. Review sensitive columns before assigning users. Re-running adds grants without removing project-specific permissions.
 
@@ -31,6 +31,7 @@ modelsheet.view_field_shop_product_price
 modelsheet.edit_field_shop_product_price
 modelsheet.bulk_shop_product
 modelsheet.history_shop_product
+modelsheet.undo_shop_product
 ```
 
 Field permissions never grant model-level editing. Hidden fields cannot be used for search, filters, order, formulas or history. A custom `PermissionPolicy` further restricts access.

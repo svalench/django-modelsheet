@@ -22,8 +22,11 @@ def test_schema_exposes_explicit_fields(api):
     response = api.get(BASE + "schema/")
     assert response.status_code == 200
     fields = {f["name"]: f for f in response.json()["fields"]}
-    assert not fields["category"]["editable"]
+    assert fields["category"]["editable"]
+    assert fields["category"]["related"]
+    assert not fields["tags"]["editable"]
     assert fields["price"]["editable"]
+    assert fields["price"]["decimal_places"] == 2
     assert "id" not in fields
 
 
@@ -117,8 +120,9 @@ def test_unique_error_not_500(api, products):
 
 def test_readonly_and_unknown_fields_rejected(api, products):
     view = loaded(api)
-    for values in ({"id": 9}, {"category": 9}, {"__class__": "oops"}):
+    for values in ({"id": 9}, {"__class__": "oops"}):
         assert post(api, "save", save_payload(view, values)).status_code == 403
+    assert post(api, "save", save_payload(view, {"category": 9})).status_code == 400
 
 
 def test_snapshot_bound_to_state_and_expiry(api, products):

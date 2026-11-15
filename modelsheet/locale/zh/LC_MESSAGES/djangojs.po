@@ -1,0 +1,131 @@
+msgid ""
+msgstr ""
+"Language: zh\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Formula"
+msgstr "公式"
+
+msgid "Value / comma-separated list"
+msgstr "值或逗号分隔列表"
+
+msgid "Paste exceeds configured limits"
+msgstr "粘贴超出配置的限制"
+
+msgid "AND"
+msgstr "并且"
+
+msgid "OR"
+msgstr "或者"
+
+msgid "Equals"
+msgstr "等于"
+
+msgid "Does not equal"
+msgstr "不等于"
+
+msgid "Less than"
+msgstr "小于"
+
+msgid "Less or equal"
+msgstr "小于或等于"
+
+msgid "Greater than"
+msgstr "大于"
+
+msgid "Greater or equal"
+msgstr "大于或等于"
+
+msgid "In list"
+msgstr "在列表中"
+
+msgid "Not in list"
+msgstr "不在列表中"
+
+msgid "Is empty"
+msgstr "为空"
+
+msgid "Contains"
+msgstr "包含"
+
+msgid "Export"
+msgstr "导出"
+
+msgid "Import"
+msgstr "导入"
+
+msgid "Add row"
+msgstr "新增行"
+
+msgid "Delete rows"
+msgstr "删除行"
+
+msgid "Revert save"
+msgstr "撤销上次保存"
+
+msgid "Find"
+msgstr "查找"
+
+msgid "Replace"
+msgstr "替换"
+
+msgid "Fill right"
+msgstr "向右填充"
+
+msgid "Views"
+msgstr "视图"
+
+msgid "Save view"
+msgstr "保存视图"
+
+msgid "Shared"
+msgstr "共享"
+
+msgid "Yes"
+msgstr "是"
+
+msgid "No"
+msgstr "否"
+
+msgid "Required"
+msgstr "必填"
+
+msgid "Too long"
+msgstr "超出长度"
+
+msgid "Invalid number"
+msgstr "需要数字"
+
+msgid "Invalid integer"
+msgstr "需要整数"
+
+msgid "Invalid date"
+msgstr "需要日期"
+
+msgid "Match case"
+msgstr "区分大小写"
+
+msgid "Replace all"
+msgstr "全部替换"
+
+msgid "Choose file"
+msgstr "选择文件"
+
+msgid "Reverted"
+msgstr "已撤销保存"
+
+msgid "Search"
+msgstr "搜索"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Loading"
+msgstr "加载中"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "Apply"
+msgstr "应用"

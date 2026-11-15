@@ -47,9 +47,15 @@
 | 同步 | 单个事务，全成或全败 |
 | 后台 | 分批提交，可能部分完成 |
 
+## 导入与导出
+
+**Export** 下载当前筛选和排序下的全部允许行，而不只是已加载的页，上限为 `max_export_rows`。用户不能查看的列会被省略。关系单元格导出标签。以 `=`、`+`、`-`、`@`、制表符或回车开头的值会加前缀，避免表格软件把它当成公式。XLSX 需要 `django-modelsheet[xlsx]`，否则服务器返回 `415`。
+
+**Import** 接受 CSV 或 XLSX（`max_import_rows`、`max_import_bytes`）。映射列（含 `pk`）后预览。确认复用批量流程：同样的权限、幂等键、校验和审计。外键可以是主键或唯一的关联标签。导入只更新已有行，不创建行。预览有错误时不能确认。
+
 ## 大型操作
 
-默认后台阈值为 5000 行，批次大小为 200。未配置 `BackgroundAdapter` 时，超出阈值会在昂贵处理前拒绝。大型预览也通过适配器运行。软件包不附带队列或 Celery worker。
+默认后台阈值为 5000 行，批次大小为 200。未配置 `BackgroundAdapter` 时，超出阈值会在昂贵处理前拒绝。可设置 `ThreadBackgroundAdapter`、`DjangoTasksBackgroundAdapter`（Django 6）或 `CeleryBackgroundAdapter`，让更大的计划在请求之外运行。参见[后台约定](../background.md)。
 
 取消只停止后续批次，不回滚已完成更改。恢复只处理未完成项，不重复成功项。参见[后台契约](../background.md)与 [HTTP API](../api.md)。
 

@@ -49,9 +49,23 @@ History contains status, counters, row outcomes and errors. Current permissions 
 | Synchronous | One transaction; all or nothing |
 | Background | Commits in chunks; partial completion is possible |
 
+## Import and export
+
+**Export** downloads every permitted row of the current filter and sort, not only
+the loaded page, up to `max_export_rows`. Columns the user cannot view are omitted.
+Relation cells export their labels. Values that start with `=`, `+`, `-`, `@`, tab
+or a carriage return are prefixed so a spreadsheet does not treat them as formulas.
+XLSX needs `django-modelsheet[xlsx]`; otherwise the server returns `415`.
+
+**Import** accepts CSV or XLSX (`max_import_rows`, `max_import_bytes`). Map columns,
+including `pk`, then preview. Confirmation reuses the bulk pipeline: the same
+permissions, idempotency key, validation and audit. A foreign-key cell may be a
+primary key or a unique related label. Import updates existing rows; it does not
+create rows. Confirm is refused while the preview has errors.
+
 ## Large operations
 
-Default background threshold: 5000 rows; chunk size: 200. Without a `BackgroundAdapter`, exceeding the threshold fails before expensive planning. Large previews use the adapter too. A queue and Celery worker are not bundled.
+Default background threshold: 5000 rows; chunk size: 200. Without a `BackgroundAdapter`, exceeding the threshold fails before expensive planning. Set `ThreadBackgroundAdapter`, `DjangoTasksBackgroundAdapter` (Django 6) or `CeleryBackgroundAdapter` so larger plans run outside the request. See the [background contract](../background.md).
 
 Cancel stops future chunks without undoing completed changes. Resume processes unfinished entries without repeating successful ones. See the [background contract](../background.md) and [HTTP API](../api.md).
 

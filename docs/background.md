@@ -1,8 +1,25 @@
 # Background adapter contract
 
-The package includes the worker entry point and persistent operation state, but
-does not bundle a queue, broker, scheduler or Celery dependency. With no adapter,
-operations over bulk_background_threshold fail before building a plan.
+The package includes the worker entry point and persistent operation state.
+The default `background_adapter` stays unset, so operations over
+`bulk_background_threshold` still fail before building a plan until you choose one.
+
+Built-in adapters, all optional:
+
+| Adapter | Path | When to use |
+| --- | --- | --- |
+| Thread | `modelsheet.background.ThreadBackgroundAdapter` | No extra services. Work runs in a daemon thread and does not survive a process restart; resume after the lease expires. |
+| Django tasks | `modelsheet.background.DjangoTasksBackgroundAdapter` | Django 6+ `django.tasks`. `ImmediateBackend` runs the task inside `enqueue`. |
+| Celery | `modelsheet.contrib.celery_adapter.CeleryBackgroundAdapter` | Install `django-modelsheet[celery]`, import the module in the worker, and point the setting at this class. The task name is `modelsheet.process_operation`. |
+
+```python
+MODELSHEET = {
+    "background_adapter": "modelsheet.background.ThreadBackgroundAdapter",
+}
+```
+
+A project adapter is still the right place for tenant context. With no adapter,
+operations over the threshold fail before building a plan.
 
 ```python
 from django.test import RequestFactory

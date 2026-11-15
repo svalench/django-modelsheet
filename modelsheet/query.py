@@ -1,10 +1,14 @@
+import base64
+import binascii
 import json
 from copy import copy
 
 from django.core.exceptions import ValidationError
-from django.db.models import Q
+from django.db.models import F, Q
+from django.utils.crypto import constant_time_compare, salted_hmac
 from django.utils.translation import gettext_lazy as _
 
+from .adapters import serialize
 from .conf import component, config
 from .errors import SheetError
 from .metadata import require_fields
@@ -98,18 +102,143 @@ def parse_state(params):
         filters = params.get("filter", {})
         sort = params.get("sort", [])
         columns = params.get("columns", None)
+        pagination = params.get("pagination", config()["pagination"])
+        cursor = params.get("cursor") or None
+        if pagination not in ("offset", "keyset"):
+            raise ValueError()
+        if cursor is not None and (not isinstance(cursor, str) or len(cursor) > 4000):
+            raise ValueError()
+        # Keyset не использует offset, поэтому потолок max_offset к нему не применяется.
+        offset = 0 if pagination == "keyset" else parse_offset(params)
         return {
             "q": str(params.get("q", ""))[:500],
             "filter": json.loads(filters) if isinstance(filters, str) else filters,
             "sort": json.loads(sort) if isinstance(sort, str) else sort,
-            "offset": parse_offset(params),
+            "offset": offset,
             "limit": min(
                 config()["max_page_size"], max(1, int(params.get("limit", config()["page_size"])))
             ),
             "columns": json.loads(columns) if isinstance(columns, str) else columns,
+            "pagination": pagination,
+            "cursor": cursor,
         }
     except (TypeError, ValueError):
         raise SheetError("invalid_state", _("Invalid view state.")) from None
+
+
+def sort_specs(state, fields):
+    if not isinstance(state["sort"], list) or len(state["sort"]) > 10:
+        raise SheetError("invalid_sort", _("Expected up to ten sort fields."))
+    specs = []
+    for item in state["sort"]:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"field", "dir"}
+            or item["dir"] not in ("asc", "desc")
+        ):
+            raise SheetError("invalid_sort", _("Expected field and asc/desc direction."))
+        if item["field"] != "pk":
+            require_fields([item["field"]], fields)
+        specs.append({"field": item["field"], "dir": item["dir"]})
+    if not any(item["field"] == "pk" for item in specs):
+        specs.append({"field": "pk", "dir": "desc"})
+    return specs
+
+
+def encode_cursor(values):
+    payload = json.dumps(values, separators=(",", ":"), default=str).encode()
+    signature = salted_hmac("modelsheet.cursor", payload, algorithm="sha256").hexdigest()
+    raw = signature.encode() + b"." + payload
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+def decode_cursor(token):
+    padded = token + "=" * (-len(token) % 4)
+    try:
+        raw = base64.urlsafe_b64decode(padded.encode())
+        signature, payload = raw.split(b".", 1)
+        values = json.loads(payload)
+    except (ValueError, binascii.Error, UnicodeError, json.JSONDecodeError):
+        raise SheetError("invalid_cursor", _("Cursor is invalid.")) from None
+    expected = salted_hmac("modelsheet.cursor", payload, algorithm="sha256").hexdigest().encode()
+    if not constant_time_compare(signature, expected) or not isinstance(values, list):
+        raise SheetError("invalid_cursor", _("Cursor is invalid."))
+    return values
+
+
+def cursor_values(obj, specs):
+    values = []
+    for spec in specs:
+        if spec["field"] == "pk":
+            values.append(serialize(obj.pk))
+            continue
+        field = obj._meta.get_field(spec["field"])
+        values.append(serialize(field.value_from_object(obj)))
+    return values
+
+
+def restore_cursor_values(model, specs, raw_values):
+    if len(raw_values) != len(specs):
+        raise SheetError("invalid_cursor", _("Cursor is invalid."))
+    adapter = component("field_adapter")
+    restored = []
+    for spec, value in zip(specs, raw_values, strict=True):
+        if value is None:
+            restored.append(None)
+            continue
+        if spec["field"] == "pk":
+            restored.append(model._meta.pk.to_python(value))
+            continue
+        field = model._meta.get_field(spec["field"])
+        target = field.target_field if field.is_relation else field
+        try:
+            restored.append(adapter.parse(target, value))
+        except (ValidationError, ValueError, TypeError, ArithmeticError):
+            raise SheetError("invalid_cursor", _("Cursor is invalid.")) from None
+    return restored
+
+
+def keyset_filter(specs, values):
+    """Следующая страница при NULLS LAST: NULL больше любого значения в обоих направлениях."""
+    query = Q()
+    added = False
+    for index, (spec, value) in enumerate(zip(specs, values, strict=True)):
+        equals = Q()
+        for earlier, earlier_value in zip(specs[:index], values[:index], strict=True):
+            name = earlier["field"]
+            if earlier_value is None:
+                equals &= Q(**{f"{name}__isnull": True})
+            else:
+                equals &= Q(**{name: earlier_value})
+        if value is None:
+            continue
+        lookup = "gt" if spec["dir"] == "asc" else "lt"
+        strict = Q(**{f"{spec['field']}__{lookup}": value}) | Q(
+            **{f"{spec['field']}__isnull": True}
+        )
+        query |= equals & strict
+        added = True
+    if not added:
+        return Q(pk__in=[])
+    return query
+
+
+def apply_ordering(qs, specs, *, keyset):
+    if not keyset:
+        # Прежний контракт: сортировка пользователя и обязательный хвост -pk.
+        user = [("-" if spec["dir"] == "desc" else "") + spec["field"] for spec in specs]
+        if user and user[-1] == "-pk":
+            user = user[:-1]
+        return qs.order_by(*user, "-pk")
+    expressions = []
+    for spec in specs:
+        expression = F(spec["field"])
+        expressions.append(
+            expression.desc(nulls_last=True)
+            if spec["dir"] == "desc"
+            else expression.asc(nulls_last=True)
+        )
+    return qs.order_by(*expressions)
 
 
 def queryset(request, admin, fields, state):
@@ -131,19 +260,21 @@ def queryset(request, admin, fields, state):
                 qs = qs.distinct()
         else:
             qs = qs.none()
-    ordering = []
-    if not isinstance(state["sort"], list) or len(state["sort"]) > 10:
-        raise SheetError("invalid_sort", _("Expected up to ten sort fields."))
-    for item in state["sort"]:
-        if (
-            not isinstance(item, dict)
-            or set(item) != {"field", "dir"}
-            or item["dir"] not in ("asc", "desc")
-        ):
-            raise SheetError("invalid_sort", _("Expected field and asc/desc direction."))
-        if item["field"] != "pk":
-            require_fields([item["field"]], fields)
-        ordering.append(("-" if item["dir"] == "desc" else "") + item["field"])
-    qs = qs.order_by(*ordering, "-pk")
-    related = [name for name in fields if admin.model._meta.get_field(name).many_to_one]
-    return qs.select_related(*related) if related else qs
+    specs = sort_specs(state, fields)
+    keyset = state.get("pagination") == "keyset"
+    qs = apply_ordering(qs, specs, keyset=keyset)
+    if keyset and state.get("cursor"):
+        raw = decode_cursor(state["cursor"])
+        qs = qs.filter(keyset_filter(specs, restore_cursor_values(admin.model, specs, raw)))
+    related, prefetched = [], []
+    for name in fields:
+        field = admin.model._meta.get_field(name)
+        if field.many_to_one:
+            related.append(name)
+        elif field.many_to_many:
+            prefetched.append(name)
+    if related:
+        qs = qs.select_related(*related)
+    if prefetched:
+        qs = qs.prefetch_related(*prefetched)
+    return qs

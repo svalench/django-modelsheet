@@ -5,6 +5,7 @@ import uuid
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.utils import timezone
@@ -221,6 +222,173 @@ def build_plan(request, admin, op):
     op.save()
 
 
+def import_preview(request, admin, payload):
+    """План импорта — тот же preview/confirm, но значения заданы построчно."""
+    check_model(request, admin, change=True, action="bulk")
+    fields = fields_for(request, admin)
+    records = payload.get("rows")
+    if not isinstance(records, list) or not records:
+        raise SheetError("invalid_import", _("Import file has no data rows."))
+    if len(records) > config()["max_import_rows"]:
+        raise SheetError("import_limit", _("Too many import rows."))
+    seen = set()
+    names = set()
+    for record in records:
+        if (
+            not isinstance(record, dict)
+            or set(record) != {"pk", "values"}
+            or not isinstance(record["values"], dict)
+            or not record["values"]
+        ):
+            raise SheetError("invalid_import", _("Each import row needs a pk and values."))
+        pk = str(record["pk"])
+        if pk in seen:
+            raise SheetError("invalid_import", _("Each import row needs a unique pk."))
+        seen.add(pk)
+        require_fields(record["values"], fields, edit=True)
+        names.update(record["values"])
+    key, request_hash = operation_key(payload), digest(payload)
+    op = existing_operation(request, admin, key, request_hash)
+    if op:
+        return report(request, admin, op, own=True)
+    parameters = {
+        "import": True,
+        "rows": records,
+        "assignments": dict.fromkeys(names, ""),
+        "state": {
+            "q": "",
+            "filter": {},
+            "sort": [],
+            "offset": 0,
+            "limit": 1,
+            "columns": None,
+            "pagination": "offset",
+            "cursor": None,
+        },
+        "today": timezone.now().date().isoformat(),
+    }
+    background = len(records) > config()["bulk_background_threshold"]
+    adapter = component("background_adapter")
+    if background and adapter is None:
+        raise SheetError(
+            "background_required",
+            _("Configure a background adapter or narrow the filter."),
+            status=409,
+        )
+    try:
+        with write_transaction():
+            get_user_model().objects.select_for_update().get(pk=request.user.pk)
+            op = existing_operation(request, admin, key, request_hash)
+            if op:
+                return report(request, admin, op, own=True)
+            rate_limit(request)
+            op = Operation.objects.create(
+                user=request.user,
+                site_name=admin.admin_site.name,
+                model_label=admin.model._meta.label,
+                kind="bulk",
+                status="preparing" if background else "preview",
+                idempotency_key=key,
+                request_hash=request_hash,
+                parameters=parameters,
+                total=len(records),
+                context=adapter.capture_context(request) if background else {},
+            )
+            if not background:
+                build_import_plan(request, admin, op)
+    except IntegrityError:
+        raise SheetError(
+            "idempotency_conflict",
+            _("Concurrent operation submission. Retry with the same key."),
+            status=409,
+        ) from None
+    if background:
+        enqueue(op, "preview")
+    return report(request, admin, op, own=True)
+
+
+def build_import_plan(request, admin, op):
+    check_model(request, admin, change=True, action="bulk")
+    fields = fields_for(request, admin)
+    parameters = op.parameters
+    require_fields(parameters["assignments"], fields, edit=True)
+    prepared, errors = [], 0
+    for record in parameters["rows"]:
+        pk = str(record["pk"])
+        obj = admin.get_queryset(request).filter(pk=pk).first()
+        before, values, error, prior = {}, {}, {}, ""
+        if obj is None:
+            error = {"code": "forbidden", "message": "Row is unavailable for this operation."}
+        else:
+            prior = version(obj)
+            try:
+                incoming = resolve_import_values(request, admin.model, record["values"])
+                row_allowed(request, admin, obj, edit=True)
+                require_object_editable(request, admin, obj, incoming)
+                before = {name: original_values(obj, fields)[name] for name in incoming}
+                validate_values(obj, incoming, request, fields)
+                values = {name: original_values(obj, fields)[name] for name in incoming}
+            except SheetError as exc:
+                error = exc.as_dict()
+                values = {}
+        if error:
+            errors += 1
+        prepared.append(
+            OperationItem(
+                operation=op,
+                pk_value=pk,
+                version=prior,
+                before=before,
+                after=values,
+                status="error" if error else "pending",
+                error=error,
+            )
+        )
+    OperationItem.objects.bulk_create(prepared, batch_size=200)
+    op.total, op.errors, op.status = len(prepared), errors, "preview"
+    op.preview_expires_at = timezone.now() + timedelta(seconds=config()["preview_ttl_seconds"])
+    kept = {key: value for key, value in parameters.items() if key != "rows"}
+    kept["import"] = True
+    op.parameters = kept
+    op.save()
+
+
+def resolve_import_values(request, model, values):
+    resolved = {}
+    for name, raw in values.items():
+        field = model._meta.get_field(name)
+        if field.many_to_one and raw not in ("", None):
+            resolved[name] = resolve_fk(request, field, raw)
+        else:
+            resolved[name] = raw
+    return resolved
+
+
+def resolve_fk(request, field, raw):
+    """PK или единственная подпись str() внутри queryset связанного ModelAdmin."""
+    from .services import related_admin
+
+    target = related_admin(field.remote_field.model)
+    if target is None or not (
+        target.has_view_permission(request) or target.has_change_permission(request)
+    ):
+        return raw
+    queryset = target.get_queryset(request)
+    try:
+        match = queryset.filter(pk=raw).values_list("pk", flat=True).first()
+    except (ValueError, ValidationError, TypeError):
+        match = None
+    if match is not None:
+        return match
+    found = []
+    for obj in queryset.order_by("pk")[:5000]:
+        if str(obj) == str(raw):
+            found.append(obj.pk)
+            if len(found) > 1:
+                return raw
+    return found[0] if len(found) == 1 else raw
+
+
 def enqueue(op, phase):
     try:
         component("background_adapter").enqueue(str(op.pk), phase)
@@ -421,7 +589,10 @@ def process_operation(request, admin, operation_id, phase):
             op = Operation.objects.select_for_update().get(pk=operation_id)
             if op.lease_token != token or op.cancel_requested:
                 return
-            build_plan(request, admin, op)
+            if op.parameters.get("import"):
+                build_import_plan(request, admin, op)
+            else:
+                build_plan(request, admin, op)
             op.lease_until, op.lease_token = None, None
             op.save()
         return

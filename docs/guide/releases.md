@@ -1,5 +1,21 @@
 # Release and limitations
 
+## 0.5.0 · 13 November 2026
+
+Relationship labels and a permission-aware foreign-key editor, typed cell editors, CSV/XLSX import and export, saved views, in-sheet create and delete, server undo, friendlier filters, find/replace, fill right, optional background adapters, dry-run validation and opt-in keyset pagination. Object-permission pages no longer skip visible rows. Migration `0003_saved_view` adds shared views.
+
+```bash
+python -m pip install --upgrade 'django-modelsheet[xlsx,celery]==0.5.0'
+```
+
+`xlsx` and `celery` extras are optional. Back up the database, install the package, run `migrate` and `collectstatic`, restart workers and reload browser tabs. The default pagination mode and the default background adapter are unchanged (`offset` and unset).
+
+## 0.4.0 · 30 October 2026
+
+Per-object readonly fields are rejected on save and bulk. `GET rows/` is throttled and old snapshots are pruned. `history_scope` can hide other users' operations (the default remains `"all"`). `offset` is capped by `max_offset`. API errors are translated, and unexpected exceptions are no longer reported as a malformed request.
+
+No migrations. Install `django-modelsheet==0.4.0`, run `collectstatic` and restart.
+
 ## 0.3.0 · 25 October 2026
 
 Fixes special string primary keys in the edit buffer and immutable preview expiry. Includes permission-safe cached bulk aggregates, stale-response guards and automatic `ModelSheetAdmin` discovery. Publishing requires the complete CI matrix, browser/package checks and strict documentation checks.
@@ -51,6 +67,21 @@ Includes explicit model registration, clipboard/fill-down/undo, Decimal calculat
 
 Check your combination in [CI](https://github.com/svalench/django-modelsheet/actions/workflows/ci.yml); local checks and boundaries are in the [validation report](../validation.md).
 
+## 0.5.0 boundaries
+
+| Capability | Current behavior |
+| --- | --- |
+| Create/delete | In the sheet when the user has model add/delete permission, in the same atomic save |
+| Foreign key | Label plus autocomplete; the stored value remains the primary key |
+| Many-to-many | Read-only labels; import and undo do not edit links |
+| Formulas | One-time values or computed columns; new rows cannot start with a formula |
+| Undo | Local buffer, plus server undo of the last save (not an undo of that undo) |
+| File import/export | CSV, and XLSX with the optional extra; TSV clipboard remains |
+| Background queue | Optional thread, Django tasks or Celery adapter; unset by default |
+| Pagination | Offset by default; keyset is opt-in and ignores `max_offset` |
+| Multiple databases | Operations use `default` only |
+| Computed-column sorting | Unsupported |
+
 ## 0.3.0 boundaries
 
 | Capability | Current behavior |
@@ -65,6 +96,6 @@ Check your combination in [CI](https://github.com/svalench/django-modelsheet/act
 | Multiple databases | Operations use `default` only |
 | Computed-column sorting | Unsupported |
 
-Server undo, relationship editors, import/export, fast-save, persistent formulas and cursor pagination are future directions, not dated promises.
+The table above records 0.3.0. Relationship editors, import/export, server undo and keyset pagination shipped in 0.5.0. Fast-save and persistent formulas remain future work.
 
 [Source](https://github.com/svalench/django-modelsheet) · [Changelog](https://github.com/svalench/django-modelsheet/blob/main/CHANGELOG.md) · [Contributing](https://github.com/svalench/django-modelsheet/blob/main/CONTRIBUTING.md) · [Security](https://github.com/svalench/django-modelsheet/blob/main/SECURITY.md)

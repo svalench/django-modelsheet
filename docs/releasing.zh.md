@@ -30,7 +30,7 @@ wheel/sdist 元数据、新安装及从 0.3.0a2 升级。它调用 `docs-checks.
 严格文档构建、已提交的演示资源和演示浏览器测试。这些验证流程不发布任何内容。
 
 `workflow.yml` 首先检查稳定版本和标签，再对同一提交调用完整 CI。发布任务依赖全部检查，
-仅使用验证成功后生成的 `pypi-distributions`。旧提交的绿色 CI 不能证明当前提交可发布。
+仅使用验证成功后生成的 `pypi-distributions`。发布 GitHub Release 时，另一个任务下载同一产物，生成 `SHA256SUMS`，并把 wheel、sdist 和校验文件附到 Release。它不上传 PyPI，也不改变发布任务的依赖。旧提交的绿色 CI 不能证明当前提交可发布。
 
 获批后，在 `main` 上运行 **Publish to PyPI**。不勾选 `publish` 只执行验证；勾选才上传。
 发布 GitHub Release `v0.3.0` 也会触发相同检查和上传。普通 push 不发布包，其他分支不能手动上传。

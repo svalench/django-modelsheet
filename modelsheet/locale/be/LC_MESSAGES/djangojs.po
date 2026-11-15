@@ -1,0 +1,131 @@
+msgid ""
+msgstr ""
+"Language: be\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+msgid "Formula"
+msgstr "Формула"
+
+msgid "Value / comma-separated list"
+msgstr "Значэнне або спіс праз коску"
+
+msgid "Paste exceeds configured limits"
+msgstr "Устаўка перавышае зададзеныя межы"
+
+msgid "AND"
+msgstr "І"
+
+msgid "OR"
+msgstr "АБО"
+
+msgid "Equals"
+msgstr "Роўна"
+
+msgid "Does not equal"
+msgstr "Не роўна"
+
+msgid "Less than"
+msgstr "Менш"
+
+msgid "Less or equal"
+msgstr "Менш або роўна"
+
+msgid "Greater than"
+msgstr "Больш"
+
+msgid "Greater or equal"
+msgstr "Больш або роўна"
+
+msgid "In list"
+msgstr "У спісе"
+
+msgid "Not in list"
+msgstr "Не ў спісе"
+
+msgid "Is empty"
+msgstr "Пусто"
+
+msgid "Contains"
+msgstr "Змяшчае"
+
+msgid "Export"
+msgstr "Экспарт"
+
+msgid "Import"
+msgstr "Імпарт"
+
+msgid "Add row"
+msgstr "Дадаць радок"
+
+msgid "Delete rows"
+msgstr "Выдаліць радкі"
+
+msgid "Revert save"
+msgstr "Адкаціць захаванне"
+
+msgid "Find"
+msgstr "Знайсці"
+
+msgid "Replace"
+msgstr "Замяніць"
+
+msgid "Fill right"
+msgstr "Запоўніць управа"
+
+msgid "Views"
+msgstr "Прагляды"
+
+msgid "Save view"
+msgstr "Захаваць выгляд"
+
+msgid "Shared"
+msgstr "Агульны"
+
+msgid "Yes"
+msgstr "Так"
+
+msgid "No"
+msgstr "Не"
+
+msgid "Required"
+msgstr "Абавязковае поле"
+
+msgid "Too long"
+msgstr "Занадта доўгае значэнне"
+
+msgid "Invalid number"
+msgstr "Патрэбен лік"
+
+msgid "Invalid integer"
+msgstr "Патрэбен цэлы лік"
+
+msgid "Invalid date"
+msgstr "Патрэбна дата"
+
+msgid "Match case"
+msgstr "Улічваць рэгістр"
+
+msgid "Replace all"
+msgstr "Замяніць усе"
+
+msgid "Choose file"
+msgstr "Выбраць файл"
+
+msgid "Reverted"
+msgstr "Адкат выкананы"
+
+msgid "Search"
+msgstr "Пошук"
+
+msgid "Save"
+msgstr "Захаваць"
+
+msgid "Loading"
+msgstr "Загрузка"
+
+msgid "Close"
+msgstr "Закрыць"
+
+msgid "Apply"
+msgstr "Ужыць"

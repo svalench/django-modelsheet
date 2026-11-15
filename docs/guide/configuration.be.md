@@ -18,6 +18,10 @@ MODELSHEET = {
     "history_retention_days": 365,
     "max_operations_per_minute": 30,
     "max_request_bytes": 1000000,
+    "max_export_rows": 100000,
+    "max_import_rows": 20000,
+    "max_import_bytes": 5000000,
+    "pagination": "offset",
     "formula": {
         "max_length": 500, "max_depth": 10,
         "max_steps": 10000, "timeout_ms": 250,
@@ -34,9 +38,12 @@ MODELSHEET = {
 | `max_save_rows` | `500` | Максімум радкоў звычайнага захавання |
 | `count_mode` | `"exact"` | `exact` або `none`; none не выконвае COUNT |
 | `max_request_bytes` | `1000000` | Мяжа памеру запыту |
+| `max_export_rows` | `100000` | Радкі аднаго экспарту CSV/XLSX |
+| `max_import_rows` / `max_import_bytes` | `20000` / `5000000` | Межы табліцы і файла імпарту |
+| `pagination` | `"offset"` | `"offset"` або `"keyset"` |
 | `snapshot_ttl_seconds` | `1800` | Час жыцця здымка ў секундах |
 
-Пагінацыя выкарыстоўвае offset/limit. Курсорная пагінацыя і прыблізныя падлікі не ўваходзяць.
+`pagination` па змаўчанні `"offset"` (мяжа `max_offset`) або `"keyset"`. Курсорная старонка ігнаруе мяжу зруху і захоўвае ўстойлівы парадак, пустыя значэнні ў канцы. `count_mode: "none"` не вяртае дакладны лік; прыблізнага падліку няма.
 
 ## Аперацыі і гісторыя
 

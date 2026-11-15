@@ -39,6 +39,9 @@ committed demo assets and playground browser tests. These validation workflows d
 `workflow.yml` first checks stable versions and the release tag, then calls the entire
 CI workflow on the same commit. The separate publish job depends on both checks and
 uses only the `pypi-distributions` artifact produced after all package checks pass.
+On a published GitHub Release, a separate job downloads that same artifact, writes
+`SHA256SUMS` and attaches the wheel, sdist and checksum file to the release. It does
+not upload to PyPI and does not change the publish job's dependencies.
 The full matrix must pass for the exact release commit; older green runs do not qualify.
 
 After approval, run **Publish to PyPI** on `main`, keeping `publish` unchecked for a

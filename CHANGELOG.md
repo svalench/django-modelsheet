@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.0 — 2026-11-13
+
+- Foreign keys show the related object's string and use a permission-aware autocomplete editor. Many-to-many columns show labels and stay read-only.
+- Boolean, date, time and choice editors; decimal input accepts a comma; F2 and typing start an edit. Dates follow the active locale.
+- Server-side CSV export of the current filtered and sorted view, and XLSX when `django-modelsheet[xlsx]` is installed. Export streams visible columns and permitted rows, capped by `max_export_rows`.
+- CSV/XLSX import reuses the bulk preview and confirm pipeline (`max_import_rows`, `max_import_bytes`).
+- Named views in the browser, plus optional shared `SavedView` rows (migration `0003_saved_view`).
+- Add and delete rows in the same atomic save, with model add/delete permissions and an audit record.
+- Server undo of the last save (`modelsheet.undo_<model>`), conflict-safe against newer fingerprints. Undo of an undo is not supported. Recreating a deleted row restores concrete fields, not many-to-many links.
+- Filter controls use localized operators, typed values and readable chips. Find and replace and fill right (Ctrl/Cmd+R) edit the loaded page through the local buffer.
+- Optional background adapters: `ThreadBackgroundAdapter`, Django 6 `DjangoTasksBackgroundAdapter`, and `CeleryBackgroundAdapter` (`django-modelsheet[celery]`). The default stays unset.
+- Blur validation plus `POST validate/` (`full_clean`, no write).
+- Opt-in keyset pagination (`MODELSHEET["pagination"] = "keyset"` or a view state). Offset remains the default, including the `max_offset` cap.
+- Object-permission paging no longer leaves holes: hidden rows are skipped in the page and in the count. Bulk preview still rejects a set that contains a hidden row.
+- Sheet strings go through gettext, with Russian, Belarusian and Chinese catalogs.
+
 ## 0.4.0 — 2026-10-30
 
 Security

@@ -4,9 +4,9 @@
 
 ## Чытанне даных
 
-`GET schema/` вяртае бачныя палі, магчымасць рэдагавання, бяспечныя віртуальныя калонкі і магчымасці.
+`GET schema/` вяртае бачныя палі, магчымасць рэдагавання, бяспечныя віртуальныя калонкі, а таксама `can_add`, `can_delete`, `can_undo`, `can_import`, `pagination` і наяўнасць XLSX.
 
-`GET rows/` прымае `q`, JSON `filter`, JSON `sort`, `offset`, `limit` і JSON `columns` — парадак паказу палёў. Адказ утрымлівае радкі `{pk,version,values}`, snapshot, нармалізаваны стан, UTC today, count (або null) і has_next.
+`GET rows/` прымае `q`, JSON `filter`, JSON `sort`, `offset`, `limit`, JSON `columns`, а для keyset яшчэ `pagination=keyset` і `cursor`. Адказ утрымлівае радкі `{pk,version,values,labels}`, snapshot, нармалізаваны стан, UTC today, count (або null), has_next і next_cursor. Сувязі захоўваюць першасны ключ у `values` і подпіс у `labels`. Схаваныя аб'екты не трапляюць ні на старонку, ні ў лік.
 
 ```json title="Прыклад фільтра"
 {"and":[{"field":"stock","op":"lt","value":10},{"field":"status","op":"eq","value":"ready"}]}

@@ -16,9 +16,9 @@ from .conf import component, config
 from .errors import SheetError
 from .formula import FormulaError, evaluate, parse, references
 from .metadata import fields_for, require_fields, require_object_editable
-from .models import Operation, OperationItem, ViewSnapshot
+from .models import Operation, OperationItem, SavedView, ViewSnapshot
 from .permissions import require_access, scope_history
-from .query import parse_state, queryset
+from .query import cursor_values, encode_cursor, parse_state, queryset, sort_specs
 from .registry import is_enabled
 
 
@@ -112,11 +112,17 @@ def computed_columns(admin, fields):
     return result
 
 
+def model_perm(user, action, model):
+    return user.has_perm(f"{model._meta.app_label}.{action}_{model._meta.model_name}")
+
+
 def schema(request, admin):
     check_model(request, admin)
     fields = fields_for(request, admin)
     from .permissions import allowed
 
+    model = admin.model
+    can_change = model_perm(request.user, "change", model) and admin.has_change_permission(request)
     return {
         "fields": list(fields.values()),
         "computed": computed_columns(admin, fields),
@@ -124,11 +130,105 @@ def schema(request, admin):
         "max_save_rows": config()["max_save_rows"],
         "formula_limits": config()["formula"],
         "timezone": timezone.get_current_timezone_name(),
-        "can_bulk": allowed(request.user, "bulk", admin.model)
-        and admin.has_change_permission(request),
-        "can_history": allowed(request.user, "history", admin.model),
-        "model": admin.model._meta.label,
-        "title": str(admin.model._meta.verbose_name_plural),
+        "can_bulk": allowed(request.user, "bulk", model) and can_change,
+        "can_history": allowed(request.user, "history", model),
+        "can_add": model_perm(request.user, "add", model) and admin.has_add_permission(request),
+        "can_delete": model_perm(request.user, "delete", model)
+        and admin.has_delete_permission(request),
+        "can_undo": allowed(request.user, "undo", model) and can_change,
+        "can_import": allowed(request.user, "bulk", model) and can_change,
+        "pagination": config()["pagination"],
+        "xlsx": importable("openpyxl"),
+        "model": model._meta.label,
+        "title": str(model._meta.verbose_name_plural),
+    }
+
+
+def importable(module):
+    import importlib.util
+
+    return importlib.util.find_spec(module) is not None
+
+
+def object_filter_mode(request, admin):
+    """model — права только на модель; queryset — SQL; object — построчная проверка."""
+    from django.contrib.admin.options import ModelAdmin
+
+    from .permissions import PermissionPolicy
+
+    policy = component("permission_policy")
+    if type(policy).restrict_queryset is not PermissionPolicy.default_restrict_queryset:
+        return "queryset"
+    view = admin.has_view_permission
+    func = getattr(view, "__func__", None)
+    admin_default = func is ModelAdmin.has_view_permission
+    policy_default = type(policy).can_view_object is PermissionPolicy.default_can_view_object
+    if admin_default and policy_default:
+        return "model"
+    return "object"
+
+
+def visible_page(request, admin, qs, state):
+    mode = object_filter_mode(request, admin)
+    if mode == "queryset":
+        qs = component("permission_policy").restrict_queryset(request, admin, qs)
+    limit = state["limit"]
+    exact = config()["count_mode"] == "exact"
+    if mode != "object":
+        if state.get("pagination") == "keyset":
+            window = list(qs[: limit + 1])
+            return window[:limit], qs.count() if exact else None, len(window) > limit
+        offset = state["offset"]
+        return (
+            list(qs[offset : offset + limit]),
+            qs.count() if exact else None,
+            qs[offset + limit : offset + limit + 1].exists(),
+        )
+    return scan_visible(request, admin, qs, state, exact=exact)
+
+
+def scan_visible(request, admin, qs, state, *, exact):
+    """Страница без дыр: скрытые объекты не занимают слот и не попадают в count."""
+    policy = component("permission_policy")
+    limit = state["limit"]
+    offset = 0 if state.get("pagination") == "keyset" else state["offset"]
+    page, skipped, total, has_next = [], 0, 0, False
+    start, chunk = 0, max(200, limit)
+    while True:
+        batch = list(qs[start : start + chunk])
+        if not batch:
+            break
+        for obj in batch:
+            if not policy.can_view_object(request, admin, obj):
+                continue
+            total += 1
+            if skipped < offset:
+                skipped += 1
+                continue
+            if len(page) < limit:
+                page.append(obj)
+            else:
+                has_next = True
+                if not exact:
+                    return page, None, True
+        if len(batch) < chunk:
+            break
+        start += chunk
+    return page, total if exact else None, has_next
+
+
+def row_payload(obj, fields):
+    adapter = component("field_adapter")
+    labels = {}
+    for name in fields:
+        field = obj._meta.get_field(name)
+        if field.is_relation:
+            labels[name] = adapter.display(field, obj)
+    return {
+        "pk": str(obj.pk),
+        "version": version(obj),
+        "values": original_values(obj, fields),
+        "labels": labels,
     }
 
 
@@ -143,15 +243,8 @@ def rows(request, admin, params):
         raise SheetError("invalid_columns", _("Columns must be a unique field list."))
     require_fields(columns, fields)
     qs = queryset(request, admin, fields, state)
-    result = []
-    for obj in qs[state["offset"] : state["offset"] + state["limit"]]:
-        try:
-            row_allowed(request, admin, obj)
-        except SheetError:
-            continue
-        result.append(
-            {"pk": str(obj.pk), "version": version(obj), "values": original_values(obj, fields)}
-        )
+    page, total, has_next = visible_page(request, admin, qs, state)
+    result = [row_payload(obj, fields) for obj in page]
     snapshot_rate_limit(request)
     snapshot = ViewSnapshot.objects.create(
         user=request.user,
@@ -162,15 +255,17 @@ def rows(request, admin, params):
         columns=columns,
     )
     prune_snapshots(request)
+    next_cursor = None
+    if state.get("pagination") == "keyset" and has_next and page:
+        next_cursor = encode_cursor(cursor_values(page[-1], sort_specs(state, fields)))
     return {
         "rows": result,
         "snapshot": str(snapshot.pk),
         "state": state,
         "today": timezone.now().date().isoformat(),
-        "count": qs.count() if config()["count_mode"] == "exact" else None,
-        "has_next": qs[
-            state["offset"] + state["limit"] : state["offset"] + state["limit"] + 1
-        ].exists(),
+        "count": total,
+        "has_next": has_next,
+        "next_cursor": next_cursor,
     }
 
 
@@ -252,7 +347,10 @@ def validate_values(obj, values, request, fields):
     adapter = component("field_adapter")
     for name, value in values.items():
         try:
-            setattr(obj, name, adapter.parse(obj._meta.get_field(name), value))
+            field = obj._meta.get_field(name)
+            parsed = adapter.parse(field, value)
+            # FK хранит ключ в attname: присваивание поля ждёт экземпляр модели.
+            setattr(obj, field.attname if field.many_to_one else name, parsed)
         except (ValidationError, ValueError, TypeError, ArithmeticError) as exc:
             raise SheetError(
                 "invalid_value",
@@ -363,11 +461,24 @@ class SheetCalculation:
         return [self.value(row["pk"], name) for row in self.snapshot.rows]
 
 
-def save(request, admin, payload):
-    check_model(request, admin, change=True)
-    fields = fields_for(request, admin)
-    changes = payload.get("changes")
-    if not isinstance(changes, list) or not 1 <= len(changes) <= config()["max_save_rows"]:
+def concrete_values(obj):
+    adapter = component("field_adapter")
+    values = {}
+    for field in obj._meta.concrete_fields:
+        if field.primary_key or not adapter.supported(field):
+            continue
+        values[field.name] = adapter.serialize(field, obj)
+    return values
+
+
+def structural_changes(payload, fields):
+    changes = payload.get("changes", [])
+    creates = payload.get("creates", [])
+    deletes = payload.get("deletes", [])
+    if not isinstance(changes, list) or not isinstance(creates, list) or not isinstance(deletes, list):
+        raise SheetError("invalid_changes", _("Each change requires pk, version and values."))
+    total = len(changes) + len(creates) + len(deletes)
+    if not 1 <= total <= config()["max_save_rows"]:
         raise SheetError("save_limit", _("Invalid number of changed rows."))
     seen = set()
     for change in changes:
@@ -383,6 +494,53 @@ def save(request, admin, payload):
             raise SheetError("duplicate_row", _("Submit one change per row."))
         seen.add(pk)
         require_fields(change["values"], fields, edit=True)
+    temp_ids = set()
+    for item in creates:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"temp_id", "values"}
+            or not isinstance(item["temp_id"], str)
+            or not 1 <= len(item["temp_id"]) <= 64
+            or not isinstance(item["values"], dict)
+        ):
+            raise SheetError("invalid_changes", _("Each new row requires temp_id and values."))
+        if item["temp_id"] in temp_ids:
+            raise SheetError("duplicate_row", _("Submit one change per row."))
+        temp_ids.add(item["temp_id"])
+        require_fields(item["values"], fields, edit=True)
+        for raw in item["values"].values():
+            if isinstance(raw, str) and raw.startswith("=") and not raw.startswith("'="):
+                raise SheetError(
+                    "invalid_value", _("Save a new row before using formulas."), field=None
+                )
+    delete_ids = []
+    for item in deletes:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"pk", "version"}
+            or not isinstance(item["version"], str)
+        ):
+            raise SheetError("invalid_changes", _("Each deletion requires pk and version."))
+        pk = str(item["pk"])
+        if pk in seen or pk in delete_ids:
+            raise SheetError("duplicate_row", _("Submit one change per row."))
+        delete_ids.append(pk)
+    return changes, creates, deletes, delete_ids
+
+
+def save(request, admin, payload):
+    check_model(request, admin, change=True)
+    fields = fields_for(request, admin)
+    changes, creates, deletes, delete_ids = structural_changes(payload, fields)
+    model = admin.model
+    if creates and not (
+        model_perm(request.user, "add", model) and admin.has_add_permission(request)
+    ):
+        raise SheetError("forbidden", _("Add permission required."), status=403)
+    if deletes and not (
+        model_perm(request.user, "delete", model) and admin.has_delete_permission(request)
+    ):
+        raise SheetError("forbidden", _("Delete permission required."), status=403)
     key, request_hash = operation_key(payload), digest(payload)
     op = existing_operation(request, admin, key, request_hash)
     if op:
@@ -391,6 +549,11 @@ def save(request, admin, payload):
     if payload.get("view_state") != snapshot.state:
         raise SheetError("stale_view", _("View changed. Reload before saving."), status=409)
     calculation = SheetCalculation(snapshot, changes, fields)
+    for pk in delete_ids:
+        if pk not in calculation.rows:
+            raise SheetError(
+                "invalid_version", _("Row does not match the loaded snapshot."), pk=pk, status=409
+            )
     evaluated = {}
     for change in changes:
         pk = str(change["pk"])
@@ -406,6 +569,14 @@ def save(request, admin, payload):
                 evaluated[pk][name] = calculation.value(pk, name)
             except FormulaError as exc:
                 raise SheetError(exc.code, str(exc), pk=pk, field=name) from exc
+    if set(delete_ids) & calculation.dependencies:
+        raise SheetError("invalid_changes", _("Cannot change and delete the same row."))
+    for item in deletes:
+        pk = str(item["pk"])
+        if not constant_time_compare(str(item["version"]), calculation.rows[pk]["version"]):
+            raise SheetError(
+                "invalid_version", _("Row does not match the loaded snapshot."), pk=pk, status=409
+            )
     try:
         with write_transaction():
             # Unique keys are also serialized by the user row to handle concurrent first submissions.
@@ -417,11 +588,12 @@ def save(request, admin, payload):
             qs = (
                 queryset(request, admin, fields, snapshot.state)
                 .select_related(None)
+                .prefetch_related(None)
                 .select_for_update()
             )
+            needed = list(calculation.dependencies) + delete_ids
             objects = {
-                str(obj.pk): obj
-                for obj in qs.filter(pk__in=calculation.dependencies).order_by("pk")
+                str(obj.pk): obj for obj in qs.filter(pk__in=needed).order_by("pk")
             }
             for pk in calculation.dependencies:
                 obj = objects.get(pk)
@@ -437,6 +609,19 @@ def save(request, admin, payload):
                     raise SheetError(
                         "row_conflict", _("Row changed since loading."), pk=pk, status=409
                     )
+            for pk in delete_ids:
+                obj = objects.get(pk)
+                if obj is None or not constant_time_compare(
+                    version(obj), calculation.rows[pk]["version"]
+                ):
+                    raise SheetError(
+                        "row_conflict", _("Row changed since loading."), pk=pk, status=409
+                    )
+                row_allowed(request, admin, obj)
+                if not component("permission_policy").can_delete_object(request, admin, obj):
+                    raise SheetError(
+                        "forbidden", _("Delete permission required."), pk=pk, status=403
+                    )
             op = Operation.objects.create(
                 user=request.user,
                 model_label=admin.model._meta.label,
@@ -445,8 +630,9 @@ def save(request, admin, payload):
                 status="running",
                 idempotency_key=key,
                 request_hash=request_hash,
-                total=len(changes),
+                total=len(changes) + len(creates) + len(deletes),
             )
+            actions = {}
             for pk, values in evaluated.items():
                 obj = objects[pk]
                 require_object_editable(request, admin, obj, values)
@@ -462,7 +648,39 @@ def save(request, admin, payload):
                     after=after,
                     status="done",
                 )
-            op.status, op.changed = "done", len(changes)
+                actions[pk] = "update"
+            for item in deletes:
+                pk = str(item["pk"])
+                obj = objects[pk]
+                before = concrete_values(obj)
+                prior = version(obj)
+                obj.delete()
+                OperationItem.objects.create(
+                    operation=op,
+                    pk_value=pk,
+                    version=prior,
+                    before=before,
+                    after={},
+                    status="done",
+                )
+                actions[pk] = "delete"
+            for item in creates:
+                obj = admin.model()
+                validate_values(obj, item["values"], request, fields)
+                save_object(obj, list(item["values"]), request)
+                after = {name: original_values(obj, fields)[name] for name in item["values"]}
+                pk = str(obj.pk)
+                OperationItem.objects.create(
+                    operation=op,
+                    pk_value=pk,
+                    version=version(obj),
+                    before={},
+                    after=after,
+                    status="done",
+                )
+                actions[pk] = "create"
+            op.parameters = {"actions": actions}
+            op.status, op.changed = "done", len(actions)
             op.save()
     except IntegrityError:
         raise SheetError(
@@ -497,7 +715,13 @@ def report(request, admin, op, *, own=False, offset=0, include_items=True):
     }
     for item in page:
         obj = objects.get(item.pk_value)
-        if obj is None or not component("permission_policy").can_view_object(request, admin, obj):
+        action = (op.parameters or {}).get("actions", {}).get(item.pk_value)
+        # Удалённая строка остаётся в аудите: объекта уже нет, поля режутся по правам.
+        if obj is None and action != "delete":
+            continue
+        if obj is not None and not component("permission_policy").can_view_object(
+            request, admin, obj
+        ):
             continue
         error = {}
         if item.error:
@@ -514,6 +738,7 @@ def report(request, admin, op, *, own=False, offset=0, include_items=True):
                 "status": item.status,
                 "before": {k: v for k, v in item.before.items() if k in fields},
                 "after": {k: v for k, v in item.after.items() if k in fields},
+                "action": action or "update",
                 "error": error,
             }
         )
@@ -532,3 +757,334 @@ def report(request, admin, op, *, own=False, offset=0, include_items=True):
         "next_offset": offset + limit,
         "created_at": op.created_at.isoformat(),
     }
+
+
+def related_admin(model):
+    from django.contrib.admin import sites
+
+    for site in list(sites.all_sites):
+        registered = site._registry.get(model)
+        if registered is not None:
+            return registered
+    return None
+
+
+def lookup(request, admin, params):
+    """Поиск связанной модели через её ModelAdmin.get_search_results и права autocomplete."""
+    check_model(request, admin)
+    fields = fields_for(request, admin)
+    name = params.get("field")
+    if not isinstance(name, str):
+        raise SheetError("invalid_field", _("Field is unavailable for this operation."))
+    require_fields([name], fields)
+    field = admin.model._meta.get_field(name)
+    if not field.is_relation or not (field.many_to_one or field.many_to_many):
+        raise SheetError("invalid_field", _("Field is unavailable for this operation."))
+    target = related_admin(field.remote_field.model)
+    if target is None or not target.get_search_fields(request):
+        raise SheetError(
+            "lookup_unavailable",
+            _("Related admin does not allow autocomplete."),
+            status=404,
+        )
+    if not (
+        target.has_view_permission(request) or target.has_change_permission(request)
+    ):
+        raise SheetError("forbidden", _("Sheet access denied."), status=403)
+    term = str(params.get("q", ""))[:200]
+    queryset, distinct = target.get_search_results(request, target.get_queryset(request), term)
+    if distinct:
+        queryset = queryset.distinct()
+    return {
+        "results": [
+            {"id": str(obj.pk), "label": str(obj)} for obj in queryset.order_by("pk")[:20]
+        ]
+    }
+
+
+def validate_draft(request, admin, payload):
+    """full_clean без записи. Ошибки строк не откатывают соседние проверки."""
+    check_model(request, admin, change=True)
+    fields = fields_for(request, admin)
+    changes = payload.get("changes")
+    if not isinstance(changes, list) or len(changes) > config()["max_save_rows"]:
+        raise SheetError("save_limit", _("Invalid number of changed rows."))
+    results = []
+    for change in changes:
+        if not isinstance(change, dict) or "values" not in change:
+            raise SheetError("invalid_changes", _("Each change requires pk, version and values."))
+        pk = str(change.get("pk", ""))
+        values = change["values"]
+        if not isinstance(values, dict):
+            raise SheetError("invalid_changes", _("Each change requires pk, version and values."))
+        require_fields(values, fields, edit=True)
+        obj = admin.get_queryset(request).filter(pk=pk).first() if pk and not pk.startswith("new:") else None
+        created = obj is None
+        if created:
+            if not (model_perm(request.user, "add", admin.model) and admin.has_add_permission(request)):
+                raise SheetError("forbidden", _("Add permission required."), status=403)
+            obj = admin.model()
+        else:
+            row_allowed(request, admin, obj, edit=True)
+            require_object_editable(request, admin, obj, values)
+        try:
+            validate_values(obj, values, request, fields)
+        except SheetError as exc:
+            results.append({"pk": pk, "ok": False, "error": exc.as_dict()})
+            continue
+        results.append({"pk": pk, "ok": True})
+    return {"results": results}
+
+
+def undo(request, admin, payload):
+    check_model(request, admin, change=True, action="undo")
+    key, request_hash = operation_key(payload), digest(payload)
+    current = existing_operation(request, admin, key, request_hash)
+    if current:
+        return report(request, admin, current, own=True)
+    target = undo_target(request, admin, payload.get("operation"))
+    try:
+        with write_transaction():
+            get_user_model().objects.select_for_update().get(pk=request.user.pk)
+            current = existing_operation(request, admin, key, request_hash)
+            if current:
+                return report(request, admin, current, own=True)
+            rate_limit(request)
+            target = Operation.objects.select_for_update().get(pk=target.pk)
+            if target.parameters.get("undone_by"):
+                raise SheetError("already_undone", _("This save was already reverted."), status=409)
+            op = Operation.objects.create(
+                user=request.user,
+                model_label=admin.model._meta.label,
+                site_name=admin.admin_site.name,
+                kind="undo",
+                status="running",
+                idempotency_key=key,
+                request_hash=request_hash,
+                total=target.items.count(),
+                parameters={"undo_of": str(target.pk)},
+            )
+            actions = {}
+            for item in target.items.order_by("id"):
+                action = (target.parameters or {}).get("actions", {}).get(item.pk_value, "update")
+                actions[item.pk_value] = apply_undo_item(request, admin, op, item, action)
+            op.parameters = {"undo_of": str(target.pk), "actions": actions}
+            op.status, op.changed = "done", len(actions)
+            op.save()
+            target.parameters = {**target.parameters, "undone_by": str(op.pk)}
+            target.save(update_fields=["parameters", "updated_at"])
+    except IntegrityError:
+        raise SheetError(
+            "constraint_conflict", _("A database constraint prevented saving."), status=409
+        ) from None
+    return report(request, admin, op, own=True)
+
+
+def undo_target(request, admin, operation_id):
+    qs = Operation.objects.filter(
+        user=request.user,
+        model_label=admin.model._meta.label,
+        site_name=admin.admin_site.name,
+        kind="save",
+        status="done",
+    )
+    if operation_id:
+        try:
+            op = qs.get(pk=operation_id)
+        except (Operation.DoesNotExist, ValidationError, ValueError):
+            raise SheetError("not_found", _("Operation not found."), status=404) from None
+    else:
+        op = qs.order_by("-created_at").first()
+        if op is None:
+            raise SheetError("not_found", _("Operation not found."), status=404)
+    if op.parameters.get("undone_by"):
+        raise SheetError("already_undone", _("This save was already reverted."), status=409)
+    return op
+
+
+def apply_undo_item(request, admin, operation, item, action):
+    model = admin.model
+    fields = fields_for(request, admin)
+    if action == "create":
+        obj = admin.get_queryset(request).select_for_update().filter(pk=item.pk_value).first()
+        if obj is None or not constant_time_compare(version(obj), item.version):
+            raise SheetError(
+                "row_conflict", _("Row changed since saving."), pk=item.pk_value, status=409
+            )
+        if not component("permission_policy").can_delete_object(request, admin, obj):
+            raise SheetError("forbidden", _("Delete permission required."), status=403)
+        before = concrete_values(obj)
+        obj.delete()
+        OperationItem.objects.create(
+            operation=operation,
+            pk_value=item.pk_value,
+            version=item.version,
+            before=before,
+            after={},
+            status="done",
+        )
+        return "delete"
+    if action == "delete":
+        if model.objects.filter(pk=item.pk_value).exists():
+            raise SheetError(
+                "row_conflict", _("Row changed since saving."), pk=item.pk_value, status=409
+            )
+        restore_deleted(model, item.pk_value, item.before)
+        obj = model.objects.get(pk=item.pk_value)
+        OperationItem.objects.create(
+            operation=operation,
+            pk_value=item.pk_value,
+            version=version(obj),
+            before={},
+            after={key: value for key, value in item.before.items() if key in fields},
+            status="done",
+        )
+        return "create"
+    obj = admin.get_queryset(request).select_for_update().filter(pk=item.pk_value).first()
+    if obj is None or not constant_time_compare(version(obj), item.version):
+        raise SheetError(
+            "row_conflict", _("Row changed since saving."), pk=item.pk_value, status=409
+        )
+    row_allowed(request, admin, obj, edit=True)
+    visible = {key: value for key, value in item.before.items() if key in fields}
+    validate_values(obj, visible, request, fields)
+    save_object(obj, visible.keys(), request)
+    OperationItem.objects.create(
+        operation=operation,
+        pk_value=item.pk_value,
+        version=version(obj),
+        before=item.after,
+        after={key: original_values(obj, fields)[key] for key in visible},
+        status="done",
+    )
+    return "update"
+
+
+def restore_deleted(model, pk, before):
+    adapter = component("field_adapter")
+    obj = model()
+    obj.pk = model._meta.pk.to_python(pk)
+    autos = {}
+    for field in model._meta.concrete_fields:
+        if field.primary_key or field.name not in before:
+            continue
+        try:
+            parsed = adapter.parse(field, before[field.name])
+        except (ValidationError, ValueError, TypeError, ArithmeticError) as exc:
+            raise SheetError(
+                "invalid_value",
+                _("Value cannot be parsed for this field."),
+                pk=str(pk),
+                field=field.name,
+            ) from exc
+        setattr(obj, field.attname, parsed)
+        if getattr(field, "auto_now", False) or getattr(field, "auto_now_add", False):
+            autos[field.attname] = parsed
+    obj.save(force_insert=True)
+    if autos:
+        model.objects.filter(pk=obj.pk).update(**autos)
+
+
+def saved_views(request, admin):
+    check_model(request, admin)
+    rows = SavedView.objects.filter(
+        model_label=admin.model._meta.label, site_name=admin.admin_site.name
+    ).filter(Q_owner(request))
+    return {
+        "views": [
+            {
+                "id": str(row.pk),
+                "name": row.name,
+                "shared": row.shared,
+                "own": row.user_id == request.user.pk,
+                "state": row.state,
+            }
+            for row in rows.order_by("name")
+        ]
+    }
+
+
+def Q_owner(request):
+    from django.db.models import Q
+
+    return Q(user=request.user) | Q(shared=True)
+
+
+def save_view(request, admin, payload):
+    check_model(request, admin)
+    name = payload.get("name")
+    state = payload.get("state")
+    shared = bool(payload.get("shared"))
+    if not isinstance(name, str) or not 1 <= len(name) <= 80:
+        raise SheetError("invalid_view", _("View name must be 1–80 characters."))
+    if not isinstance(state, dict):
+        raise SheetError("invalid_state", _("Invalid view state."))
+    stored = view_state(state)
+    if len(json.dumps(stored)) > 20_000:
+        raise SheetError("invalid_state", _("Invalid view state."))
+    if (
+        SavedView.objects.filter(
+            user=request.user,
+            model_label=admin.model._meta.label,
+            site_name=admin.admin_site.name,
+        ).count()
+        >= 50
+        and not SavedView.objects.filter(
+            user=request.user,
+            model_label=admin.model._meta.label,
+            site_name=admin.admin_site.name,
+            name=name,
+        ).exists()
+    ):
+        raise SheetError("view_limit", _("Too many saved views."))
+    row, _created = SavedView.objects.update_or_create(
+        user=request.user,
+        model_label=admin.model._meta.label,
+        site_name=admin.admin_site.name,
+        name=name,
+        defaults={"shared": shared, "state": stored},
+    )
+    return {"id": str(row.pk), "name": row.name, "shared": row.shared, "state": row.state}
+
+
+def delete_view(request, admin, payload):
+    check_model(request, admin)
+    try:
+        row = SavedView.objects.get(
+            pk=payload.get("id"),
+            user=request.user,
+            model_label=admin.model._meta.label,
+            site_name=admin.admin_site.name,
+        )
+    except (SavedView.DoesNotExist, ValidationError, ValueError):
+        raise SheetError("not_found", _("View not found."), status=404) from None
+    row.delete()
+    return {"deleted": True}
+
+
+def view_state(state):
+    frozen = state.get("frozen", 0)
+    widths = state.get("widths", {})
+    if not isinstance(frozen, int) or isinstance(frozen, bool) or frozen < 0 or frozen > 50:
+        raise SheetError("invalid_state", _("Invalid view state."))
+    if not isinstance(widths, dict) or any(
+        not isinstance(name, str) or not isinstance(width, (int, float)) or isinstance(width, bool)
+        for name, width in widths.items()
+    ):
+        raise SheetError("invalid_state", _("Invalid view state."))
+    parsed = parse_state(
+        {
+            "q": state.get("q", ""),
+            "filter": state.get("filter", {}),
+            "sort": state.get("sort", []),
+            "columns": state.get("columns"),
+            "limit": state.get("limit", config()["page_size"]),
+            "offset": 0,
+            "pagination": state.get("pagination", "offset"),
+        }
+    )
+    parsed["offset"] = 0
+    parsed["cursor"] = None
+    parsed["frozen"] = frozen
+    parsed["widths"] = {name: int(width) for name, width in widths.items()}
+    return parsed

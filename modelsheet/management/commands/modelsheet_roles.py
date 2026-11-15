@@ -34,10 +34,10 @@ class Command(BaseCommand):
         )
         definitions = {
             "Viewer": ("view_field_",),
-            "Editor": ("view_field_", "edit_field_"),
-            "Operator": ("view_field_", "edit_field_", "bulk_", "history_"),
+            "Editor": ("view_field_", "edit_field_", "undo_"),
+            "Operator": ("view_field_", "edit_field_", "bulk_", "history_", "undo_"),
             "Auditor": ("view_field_", "history_"),
-            "Admin": ("view_field_", "edit_field_", "bulk_", "history_"),
+            "Admin": ("view_field_", "edit_field_", "bulk_", "history_", "undo_"),
         }
         for role, prefixes in definitions.items():
             group, _ = Group.objects.get_or_create(name=f"{options['prefix']} {role}")
@@ -45,7 +45,9 @@ class Command(BaseCommand):
                 p for p in permissions if p.codename == "open" or p.codename.startswith(prefixes)
             ]
             for model in {model_admin.model for model_admin in admins}:
-                actions = ["view"] + (["change"] if role in ("Editor", "Operator", "Admin") else [])
+                actions = ["view"]
+                if role in ("Editor", "Operator", "Admin"):
+                    actions += ["change", "add", "delete"]
                 selected.extend(
                     Permission.objects.filter(
                         content_type__app_label=model._meta.app_label,
